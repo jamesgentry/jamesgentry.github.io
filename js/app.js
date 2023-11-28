@@ -187,7 +187,7 @@ var mainState = {
     }
 
     // TODO: game over if we are out of lives
-    if (this.lives < 0) {
+    if (this.lives < 1) {
       this.restartGame();
     }
   },
