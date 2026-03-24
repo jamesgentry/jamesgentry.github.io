@@ -334,7 +334,7 @@ class MainState extends Phaser.Scene {
     ball.body.reset(x, y);
     ball.startPos = startPos;
     if (startPos) {
-      ball.body.setVelocityX(300);
+      ball.body.setVelocity(0, 0);  // held in place; launch handled by releaseBall()
     } else {
       ball.body.setVelocity(-75, -300);
     }
@@ -343,6 +343,7 @@ class MainState extends Phaser.Scene {
   resetPowerUps() {
     this.paddle.setSize(this.paddleBaseWidth, 15);
     this.paddle.body.setSize(this.paddleBaseWidth, 15);
+    this.paddle.body.setOffset(0, 0);
     this.paddleSpeed = 500;
     this.fireRate = 200;
     this.balls.slice(1).forEach(b => {
