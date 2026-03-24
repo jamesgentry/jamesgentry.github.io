@@ -331,7 +331,11 @@ class MainState extends Phaser.Scene {
   }
 
   brickVsPaddle(brick, paddle) {
-    // TODO: decrease paddle size by some factor to a lower limit
+    const minW = 80;
+    const newW = Math.max(paddle.width * 0.85, minW);
+    paddle.setSize(newW, 15);
+    paddle.body.setSize(newW, 15);
+    paddle.body.setOffset(0, 0);
   }
 
   explodeBrick(bullet, brick) {
