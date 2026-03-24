@@ -77,6 +77,17 @@ class MainState extends Phaser.Scene {
       this.bulletObjects.push(b);
     }
 
+    // --- Power-up pool ---
+    this.powerUps = [];
+    for (let i = 0; i < 10; i++) {
+      const pu = this.add.rectangle(-200, -200, 20, 12, 0xffffff);
+      this.physics.add.existing(pu);
+      pu.setActive(false).setVisible(false);
+      pu.body.enable = false;
+      pu.type = null;
+      this.powerUps.push(pu);
+    }
+
     // --- Text ---
     const fontBold = 'Bungee Shade';
     this.scoreText = this.add.text(10, 10, 'Score: ' + this.score, {
@@ -115,6 +126,7 @@ class MainState extends Phaser.Scene {
     this.physics.add.collider(this.balls, this.brickObjects, this.hit, null, this);
     this.physics.add.overlap(this.brickObjects, this.paddle, this.brickVsPaddle, null, this);
     this.physics.add.overlap(this.bulletObjects, this.brickObjects, this.explodeBrick, null, this);
+    this.physics.add.overlap(this.powerUps, this.paddle, this.collectPowerUp, null, this);
 
     // --- Camera flash on start ---
     this.cameras.main.flash(2000, 255, 255, 255);
@@ -196,6 +208,14 @@ class MainState extends Phaser.Scene {
       }
     });
 
+    // Kill power-ups that fall off screen
+    this.powerUps.forEach(pu => {
+      if (pu.active && pu.y > H + 20) {
+        pu.setActive(false).setVisible(false);
+        pu.body.enable = false;
+      }
+    });
+
     // Detect missed balls
     this.balls.forEach(ball => {
       if (ball.active && ball.y > this.paddle.y + 40) {
@@ -249,6 +269,23 @@ class MainState extends Phaser.Scene {
     }
   }
 
+  spawnPowerUp(x, y) {
+    const types = ['wide', 'fast', 'multi', 'laser', 'life'];
+    const pu = this.powerUps.find(p => !p.active);
+    if (!pu) return;
+    pu.type = Phaser.Utils.Array.GetRandom(types);
+    pu.setFillStyle(POWERUP_COLORS[pu.type]);
+    pu.setActive(true).setVisible(true);
+    pu.body.enable = true;
+    pu.body.reset(x, y);
+  }
+
+  collectPowerUp(paddle, powerUp) {
+    powerUp.setActive(false).setVisible(false);
+    powerUp.body.enable = false;
+    // effects implemented in next task
+  }
+
   hit(ball, brick) {
     brick.isFalling = true;
     brick.body.setImmovable(false);
@@ -299,6 +336,11 @@ class MainState extends Phaser.Scene {
           }
         });
       }
+    }
+
+    // Power-up drop — 33% chance when a falling brick is shot
+    if (Math.random() < 0.33) {
+      this.spawnPowerUp(brick.x, brick.y);
     }
 
     // Kill brick
