@@ -331,11 +331,14 @@ class MainState extends Phaser.Scene {
   }
 
   brickVsPaddle(brick, paddle) {
+    if (!brick.isFalling) return;
     const minW = 80;
     const newW = Math.max(paddle.width * 0.85, minW);
     paddle.setSize(newW, 15);
     paddle.body.setSize(newW, 15);
     paddle.body.setOffset(0, 0);
+    brick.setActive(false).setVisible(false);
+    brick.body.enable = false;
   }
 
   explodeBrick(bullet, brick) {
