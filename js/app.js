@@ -242,7 +242,9 @@ class MainState extends Phaser.Scene {
       this.fireBullet();
     }
 
-    this.updateEnemies(delta);
+    if (!this.physics.world.isPaused) {
+      this.updateEnemies(delta);
+    }
 
     // Kill bullets that exit the top
     this.bulletObjects.forEach(b => {
@@ -304,6 +306,9 @@ class MainState extends Phaser.Scene {
       this.lives -= 1;
       this.livesText.text = 'Lives: ' + this.lives;
       this.resetPowerUps();
+      this.enemyBullets.forEach(b => {
+        if (b.active) { b.setActive(false).setVisible(false); b.body.enable = false; }
+      });
       this.activateBall(this.balls[0], this.paddle.x, this.paddle.y - 40, true);
     }
 
