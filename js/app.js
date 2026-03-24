@@ -1,6 +1,6 @@
-const BOX_W = 28;
-const BOX_H = 28;
-const BALL_SIZE = 16;
+const BOX_W = 46;
+const BOX_H = 26;
+const BALL_RADIUS = 9;
 const COLS = 10;
 const ROWS = 6;
 
@@ -94,6 +94,7 @@ class MainState extends Phaser.Scene {
     const centerY = H / 2;
 
     this.score = 0;
+    this.highScore = parseInt(localStorage.getItem('breakout_highscore') || '0');
     this.lives = 3;
     this.lastFired = 0;
     this.fireRate = 200;
@@ -114,8 +115,9 @@ class MainState extends Phaser.Scene {
     // --- Ball pool (1 main + 2 extras for multi-ball) ---
     this.balls = [];
     for (let i = 0; i < 3; i++) {
-      const b = this.add.rectangle(-200, -200, BALL_SIZE, BALL_SIZE, 0xffffff);
+      const b = this.add.circle(-200, -200, BALL_RADIUS, 0xffffff);
       this.physics.add.existing(b);
+      b.body.setCircle(BALL_RADIUS);
       b.body.setBounce(1);
       b.body.setAllowGravity(false);
       b.body.setCollideWorldBounds(true);
@@ -193,6 +195,9 @@ class MainState extends Phaser.Scene {
     const fontBold = 'Bungee Shade';
     this.scoreText = this.add.text(10, 10, 'Score: ' + this.score, {
       font: '20px ' + fontBold, fill: '#ffffff'
+    });
+    this.highScoreText = this.add.text(10, 36, 'Best: ' + this.highScore, {
+      font: '14px ' + fontBold, fill: '#aaddff'
     });
     this.livesText = this.add.text(W - 10, 10, 'Lives: ' + this.lives, {
       font: '20px ' + fontBold, fill: '#ffffff'
@@ -289,7 +294,7 @@ class MainState extends Phaser.Scene {
     for (let col = 0; col < COLS; col++) {
       for (let row = 0; row < ROWS; row++) {
         const x = startX + col * (BOX_W + 4);
-        const y = 60 + row * (BOX_H + 8);
+        const y = 130 + row * (BOX_H + 10);
         const brick = this.add.rectangle(x, y, BOX_W, BOX_H, 0xffffff);
         this.physics.add.existing(brick);
         brick.body.setImmovable(true);
@@ -566,6 +571,7 @@ class MainState extends Phaser.Scene {
     // Score
     this.score += 100;
     this.scoreText.text = 'Score: ' + this.score;
+    this.checkHighScore();
 
     // Camera shake
     this.cameras.main.shake(200, 0.005);
@@ -637,7 +643,16 @@ class MainState extends Phaser.Scene {
     this.pauseText.setVisible(this.physics.world.isPaused);
   }
 
+  checkHighScore() {
+    if (this.score > this.highScore) {
+      this.highScore = this.score;
+      localStorage.setItem('breakout_highscore', this.highScore);
+      this.highScoreText.text = 'Best: ' + this.highScore;
+    }
+  }
+
   restartGame() {
+    this.checkHighScore();
     this.scene.restart();
   }
 
@@ -648,6 +663,7 @@ class MainState extends Phaser.Scene {
     enemy.body.enable = false;
     this.score += enemy.pointValue;
     this.scoreText.text = 'Score: ' + this.score;
+    this.checkHighScore();
   }
 
   enemyBulletHit(enemyBullet, paddle) {
