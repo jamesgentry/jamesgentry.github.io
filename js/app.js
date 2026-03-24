@@ -485,15 +485,32 @@ class MainState extends Phaser.Scene {
   }
 
   shootEnemy(bullet, enemy) {
-    // implemented in Task 4
+    bullet.setActive(false).setVisible(false);
+    bullet.body.enable = false;
+    enemy.setActive(false).setVisible(false);
+    enemy.body.enable = false;
+    this.score += enemy.pointValue;
+    this.scoreText.text = 'Score: ' + this.score;
   }
 
   enemyBulletHit(enemyBullet, paddle) {
-    // implemented in Task 4
+    enemyBullet.setActive(false).setVisible(false);
+    enemyBullet.body.enable = false;
+    const minW = 80;
+    const newW = Math.max(paddle.width * 0.85, minW);
+    paddle.setSize(newW, 15);
+    paddle.body.setSize(newW, 15);
+    paddle.body.setOffset(0, 0);
   }
 
   enemyHitsPaddle(enemy, paddle) {
-    // implemented in Task 4
+    enemy.setActive(false).setVisible(false);
+    enemy.body.enable = false;
+    const minW = 80;
+    const newW = Math.max(paddle.width * 0.85, minW);
+    paddle.setSize(newW, 15);
+    paddle.body.setSize(newW, 15);
+    paddle.body.setOffset(0, 0);
   }
 
   activateEnemy(e, type, x, y, color, pointValue) {
@@ -595,7 +612,13 @@ class MainState extends Phaser.Scene {
   }
 
   fireEnemyBullet(x, y) {
-    // implemented in Task 4
+    const b = this.enemyBullets.find(b => !b.active);
+    if (!b) return;
+    b.setActive(true).setVisible(true);
+    b.body.enable = true;
+    b.body.reset(x, y);
+    b.body.setAllowGravity(false);
+    b.body.setVelocityY(400);
   }
 
   activateBall(ball, x, y, startPos = false) {
