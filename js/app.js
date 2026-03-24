@@ -28,6 +28,8 @@ class MainState extends Phaser.Scene {
     this.lastFired = 0;
     this.fireRate = 200;
     this.bulletSpeed = 900;
+    this.level = 1;
+    this.ballSpeed = 300;
     this.paddleBaseWidth = W / 3;
     this.paddleSpeed = 500;
 
@@ -96,6 +98,9 @@ class MainState extends Phaser.Scene {
     this.livesText = this.add.text(W - 10, 10, 'Lives: ' + this.lives, {
       font: '20px ' + fontBold, fill: '#ffffff'
     }).setOrigin(1, 0);
+    this.levelText = this.add.text(W / 2, 10, 'Level: 1', {
+      font: '20px Bungee Shade', fill: '#ffffff'
+    }).setOrigin(0.5, 0);
     this.startText = this.add.text(centerX, centerY,
       'Press UP to start\nSPACE to shoot   DOWN to pause', {
       font: '24px Bungee', fill: '#ffffff', align: 'center'
@@ -163,9 +168,12 @@ class MainState extends Phaser.Scene {
       brick.body.setVelocity(0, 0);
       brick.isFalling = false;
     });
+    this.level += 1;
+    this.levelText.text = 'Level: ' + this.level;
+    this.ballSpeed = Math.min(this.ballSpeed + 20, 500);
   }
 
-  update() {
+  update(time, delta) {
     const H = this.scale.height;
 
     // Keep startPos balls aligned with paddle
@@ -248,7 +256,7 @@ class MainState extends Phaser.Scene {
     this.balls.forEach(ball => {
       if (ball.active && ball.startPos) {
         ball.startPos = false;
-        ball.body.setVelocity(-75, -300);
+        ball.body.setVelocity(-75, -this.ballSpeed);
       }
     });
     this.startText.setVisible(false);
