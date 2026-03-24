@@ -1,316 +1,370 @@
-var mainState = {
-  preload: function() {
+const BOX_W = 28;
+const BOX_H = 28;
+const BALL_SIZE = 16;
+const COLS = 10;
+const ROWS = 6;
 
-    // preload the assets
-    var boxWidth = 28
-    var boxHeight = 28
-    var paddleWidth = window.innerWidth / 3
-    var paddleHeight = 15
-    var ballWidth = 30
-    var ballHeight = 30
+const POWERUP_COLORS = {
+  wide:  0x00ffff, // cyan
+  fast:  0xffff00, // yellow
+  multi: 0x00ff00, // green
+  laser: 0xff4444, // red
+  life:  0xff88cc  // pink
+};
 
-    this.score = 0
-    this.lives = 3
+class MainState extends Phaser.Scene {
+  constructor() {
+    super({ key: 'MainState' });
+  }
 
-    // box
-    this.box = game.add.bitmapData(boxWidth, boxHeight);
-    this.box.ctx.beginPath();
-    this.box.ctx.rect(0, 0, boxWidth, boxHeight);
-    this.box.ctx.fillStyle = '#ffffff';
-    this.box.ctx.fill();
+  create() {
+    const W = this.scale.width;
+    const H = this.scale.height;
+    const centerX = W / 2;
+    const centerY = H / 2;
 
-    // paddle
-    this.paddle = game.add.bitmapData(paddleWidth, paddleHeight);
-    this.paddle.ctx.beginPath();
-    this.paddle.ctx.rect(0, 0, paddleWidth, paddleHeight);
-    this.paddle.ctx.fillStyle = '#ffffff';
-    this.paddle.ctx.fill();
+    this.score = 0;
+    this.lives = 3;
+    this.lastFired = 0;
+    this.fireRate = 200;
+    this.bulletSpeed = 900;
+    this.paddleBaseWidth = W / 3;
+    this.paddleSpeed = 500;
 
-    // ball
-    this.ball = game.add.bitmapData(ballWidth, ballHeight);
-    this.ball.ctx.beginPath();
-    this.ball.ctx.arc(15, 15, 5, 0, Math.PI * 2, true);
-    this.ball.ctx.fillStyle = '#ffffff';
-    this.ball.ctx.fill();
+    // --- Paddle ---
+    this.paddle = this.add.rectangle(centerX, H - 20, W / 3, 15, 0xffffff);
+    this.physics.add.existing(this.paddle);
+    this.paddle.body.setImmovable(true);
+    this.paddle.body.setAllowGravity(false);
+    this.paddle.body.setCollideWorldBounds(true);
 
-    // bullet
-    this.bullet = game.add.bitmapData(30,30);
-    this.bullet.ctx.beginPath();
-    this.bullet.ctx.arc(15, 15, 5, 0, Math.PI*2, true);
-    this.bullet.ctx.fillStyle = '#ffffff';
-    this.bullet.ctx.fill();
+    // --- Ball pool (1 main + 2 extras for multi-ball) ---
+    this.balls = [];
+    for (let i = 0; i < 3; i++) {
+      const b = this.add.rectangle(-200, -200, BALL_SIZE, BALL_SIZE, 0xffffff);
+      this.physics.add.existing(b);
+      b.body.setBounce(1);
+      b.body.setAllowGravity(false);
+      b.body.setCollideWorldBounds(true);
+      b.setActive(false).setVisible(false);
+      b.body.enable = false;
+      b.startPos = false;
+      this.balls.push(b);
+    }
 
-    // shrapnel
-    this.shrapnel = game.add.bitmapData(30,30);
-    this.shrapnel.ctx.beginPath();
-    this.shrapnel.ctx.arc(15, 15, 5, 0, Math.PI*2, true);
-    this.shrapnel.ctx.fillStyle = '#ffffff';
-    this.shrapnel.ctx.fill();
+    // --- Bricks (pre-created, pooled) ---
+    this.brickObjects = [];
+    this.initBricks(centerX);
 
-    // sounds
-    game.load.audio('hit', 'audio/hit.wav');
-    game.load.audio('box', 'audio/box.wav');
-    game.load.audio('song', 'audio/aujou.mp3');
-  },
-  create: function() {
-    // Start the Arcade physics system (for movements and collisions)
-    game.physics.startSystem(Phaser.Physics.ARCADE);
-    game.physics.arcade.checkCollision.down = false;
-    game.world.enableBody = true;
+    // --- Explosion shrapnel pool ---
+    this.shrapnelPool = [];
+    for (let i = 0; i < 100; i++) {
+      const s = this.add.rectangle(-200, -200, 10, 10, 0xffffff);
+      this.physics.add.existing(s);
+      s.setActive(false).setVisible(false);
+      s.body.enable = false;
+      this.shrapnelPool.push(s);
+    }
 
-    this.sfx = {
-      hit: this.game.add.audio('hit'),
-      box: this.game.add.audio('box')
-    };
+    // --- Bullet pool ---
+    this.bulletObjects = [];
+    for (let i = 0; i < 30; i++) {
+      const b = this.add.rectangle(-200, -200, 6, 14, 0xffffff);
+      this.physics.add.existing(b);
+      b.setActive(false).setVisible(false);
+      b.body.enable = false;
+      b.body.setAllowGravity(false);
+      this.bulletObjects.push(b);
+    }
 
-    // text
-    var fontFamily = 'Bungee Shade'
-    this.scoreText = game.add.text(10, 10, 'Score: ' + this.score, { font: "20px " + fontFamily, fill: "#ffffff", align: "left" });
-    this.livesText = game.add.text((window.innerWidth - 10), 10, 'Lives: ' + this.lives, { font: "20px " + fontFamily, fill: "#ffffff", align: "right" });
-    this.livesText.anchor.set(1,0);
-    this.startText = game.add.text(this.world.centerX, this.world.centerY, 'Press "UP" to start & "DOWN" to pause', { font: "30px Bungee", fill: "#ffffff", align: "center" });
-    this.pauseText = game.add.text(this.world.centerX, this.world.centerY, 'Paused', { font: "30px " + fontFamily, fill: "#ffffff", align: "center" });
-    this.startText.anchor.set(0.5, 0.5);
-    this.pauseText.anchor.set(0.5, 0.5);
-    this.pauseText.visible = false;
-    // this.startText.setShadow(2, 2, "#333333", 20, false, true);
+    // --- Text ---
+    const fontBold = 'Bungee Shade';
+    this.scoreText = this.add.text(10, 10, 'Score: ' + this.score, {
+      font: '20px ' + fontBold, fill: '#ffffff'
+    });
+    this.livesText = this.add.text(W - 10, 10, 'Lives: ' + this.lives, {
+      font: '20px ' + fontBold, fill: '#ffffff'
+    }).setOrigin(1, 0);
+    this.startText = this.add.text(centerX, centerY,
+      'Press UP to start\nSPACE to shoot   DOWN to pause', {
+      font: '24px Bungee', fill: '#ffffff', align: 'center'
+    }).setOrigin(0.5, 0.5);
+    this.pauseText = this.add.text(centerX, centerY, 'Paused', {
+      font: '30px ' + fontBold, fill: '#ffffff', align: 'center'
+    }).setOrigin(0.5, 0.5).setVisible(false);
 
-    // Create the left/right arrow keys
-    this.left = game.input.keyboard.addKey(Phaser.Keyboard.LEFT);
-    this.right = game.input.keyboard.addKey(Phaser.Keyboard.RIGHT);
-    this.up = game.input.keyboard.addKey(Phaser.Keyboard.UP);
-    this.fire = game.input.keyboard.addKey(Phaser.Keyboard.SPACEBAR);
-    this.pause = game.input.keyboard.addKey(Phaser.Keyboard.DOWN);
-    this.restart = game.input.keyboard.addKey(Phaser.Keyboard.R);
-    this.mute = game.input.keyboard.addKey(Phaser.Keyboard.M);
+    // --- Keyboard ---
+    this.cursors = this.input.keyboard.createCursorKeys();
+    this.fireKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+    this.restartKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
 
-    // down to pause game
-    this.pause.onDown.add(this.pauseToggle, this);
+    // Prevent browser scroll on game keys
+    this.input.keyboard.addCapture([
+      Phaser.Input.Keyboard.KeyCodes.SPACE,
+      Phaser.Input.Keyboard.KeyCodes.UP,
+      Phaser.Input.Keyboard.KeyCodes.DOWN,
+      Phaser.Input.Keyboard.KeyCodes.LEFT,
+      Phaser.Input.Keyboard.KeyCodes.RIGHT,
+    ]);
 
-    // r to restart the game
-    this.restart.onDown.add(this.restartGame, this);
+    this.cursors.down.on('down', this.pauseToggle, this);
+    this.restartKey.on('down', this.restartGame, this);
 
-    // add the paddle at the bottom of the screen
-    this.paddle = game.add.sprite(this.world.centerX, (window.innerHeight - 5), this.paddle);
-    this.paddle.anchor.set(0.5, 0.5);
-    // paddle can't leave the world bounds
-    this.paddle.body.collideWorldBounds = true;
-    // make sure the paddle won't move when it hits the ball
-    this.paddle.body.immovable = true;
+    // --- Colliders (registered once, persist across frames) ---
+    this.physics.add.collider(this.paddle, this.balls, this.paddleHit, null, this);
+    this.physics.add.collider(this.balls, this.brickObjects, this.hit, null, this);
+    this.physics.add.overlap(this.brickObjects, this.paddle, this.brickVsPaddle, null, this);
+    this.physics.add.overlap(this.bulletObjects, this.brickObjects, this.explodeBrick, null, this);
 
-    game.camera.follow(this.paddle, Phaser.Camera.FOLLOW_LOCKON, 0.1, 0.1);
-    game.camera.flash(0xffffff, 2000);
+    // --- Camera flash on start ---
+    this.cameras.main.flash(2000, 255, 255, 255);
 
-    this.loadBricks();
+    this.activateBall(this.balls[0], centerX, this.paddle.y - 40, true);
+  }
 
-    // add the ball
-    this.ball = game.add.sprite(this.world.centerX, this.paddle.y -40, this.ball);
-    this.ball.startPos = true;
-    // give the ball some initial speed
-    this.ball.body.velocity.x = 300;
-    this.ball.body.tilePadding.x = 0;
-    this.ball.body.tilePadding.y = 0;
-    this.ball.body.bounce.setTo(1);
-    this.ball.body.collideWorldBounds = true;
+  initBricks(centerX) {
+    const startX = centerX - (COLS * (BOX_W + 4)) / 2 + BOX_W / 2;
+    for (let i = 0; i < COLS; i++) {
+      for (let j = 0; j < ROWS; j++) {
+        const x = startX + i * (BOX_W + 4);
+        const y = 60 + j * (BOX_H + 8);
+        const brick = this.add.rectangle(x, y, BOX_W, BOX_H, 0xffffff);
+        this.physics.add.existing(brick);
+        brick.body.setImmovable(true);
+        brick.body.setAllowGravity(false);
+        brick.initX = x;
+        brick.initY = y;
+        brick.isFalling = false;
+        this.brickObjects.push(brick);
+      }
+    }
+  }
 
-    // explosion
-    this.explosion = game.add.group();
-    this.explosion.enableBody = true;
-    this.explosion.physicsBodyType = Phaser.Physics.ARCADE;
-    this.explosion.createMultiple(100, this.shrapnel);
-    this.explosion.callAll('body.setSize', 'body', 10, 10, 10, 10);
-    this.explosion.setAll('checkWorldBounds', true);
-    this.explosion.setAll('outOfBoundsKill', true);
-    this.explosion.setAll('anchor.x', 0.5);
-    this.explosion.setAll('anchor.y', 0.5);
+  resetBricks() {
+    this.brickObjects.forEach(brick => {
+      brick.setPosition(brick.initX, brick.initY);
+      brick.setActive(true).setVisible(true);
+      brick.body.reset(brick.initX, brick.initY);
+      brick.body.enable = true;
+      brick.body.setImmovable(true);
+      brick.body.setAllowGravity(false);
+      brick.body.setVelocity(0, 0);
+      brick.isFalling = false;
+    });
+  }
 
-    // 30 bullets
-    this.weapon = this.game.add.weapon(30, this.bullet);
-    // bullet killed when it leaves world bounds
-    this.weapon.bulletKillType = Phaser.Weapon.KILL_WORLD_BOUNDS;
-    // bullet speed
-    this.weapon.bulletSpeed = 900;
-    // rate of fire
-    this.weapon.fireRate = 200;
-    // track the paddle
-    this.weapon.trackSprite(this.paddle, 0, 0, false);
+  update() {
+    const H = this.scale.height;
 
-    this.music = this.game.add.audio('song', 0.5, true);
-    // this.music.play();
-  },
-  update: function() {
-    if (this.ball.startPos && this.up.isDown) {
+    // Keep startPos balls aligned with paddle
+    this.balls.forEach(ball => {
+      if (ball.active && ball.startPos) ball.setX(this.paddle.x);
+    });
+
+    // Release ball on UP
+    if (this.cursors.up.isDown && this.balls.some(b => b.active && b.startPos)) {
       this.releaseBall();
     }
 
-    // move with pointer
-    // this.paddle.body.x = game.input.activePointer.x;
-    // or
-    // Move the paddle left/right when an arrow key is pressed
-    if (this.left.isDown) this.paddle.body.velocity.x = -500;
-    else if (this.right.isDown) this.paddle.body.velocity.x = 500;
-    // Stop the paddle when no key is pressed
-    else this.paddle.body.velocity.x = 0;
-
-    if (this.fire.isDown) {
-      this.weapon.fire();
-      // TODO: find good short sound for this
-      // this.sfx.hit.play();
+    // Paddle movement
+    if (this.cursors.left.isDown) {
+      this.paddle.body.setVelocityX(-this.paddleSpeed);
+    } else if (this.cursors.right.isDown) {
+      this.paddle.body.setVelocityX(this.paddleSpeed);
+    } else {
+      this.paddle.body.setVelocityX(0);
     }
 
-    // all collisions
-    // collisions between the paddle and the ball
-    game.physics.arcade.collide(this.paddle, this.ball, this.paddleHit, null, this);
-    // when the ball hits a brick
-    game.physics.arcade.collide(this.ball, this.bricks, this.hit, null, this);
-    // we die if brick hits us
-    game.physics.arcade.overlap(this.bricks, this.paddle, this.brickVsPaddle, null, this);
-    // block explodes if we shoot it while it's falling
-    game.physics.arcade.overlap(this.weapon.bullets, this.bricks, this.explodeBrick, null, this);
+    // Fire bullets
+    if (this.fireKey.isDown) {
+      this.fireBullet();
+    }
 
-    // ball is below the paddle!
-    if (this.ball.y > this.paddle.y) {
+    // Kill bullets that exit the top
+    this.bulletObjects.forEach(b => {
+      if (b.active && b.y < -20) {
+        b.setActive(false).setVisible(false);
+        b.body.enable = false;
+      }
+    });
 
-      // get your consequence
-      // reduce lives?
+    // Kill bricks that fall off screen
+    this.brickObjects.forEach(brick => {
+      if (brick.active && brick.y > H + 50) {
+        brick.setActive(false).setVisible(false);
+        brick.body.enable = false;
+      }
+    });
+
+    // Detect missed balls
+    this.balls.forEach(ball => {
+      if (ball.active && ball.y > this.paddle.y + 40) {
+        ball.setActive(false).setVisible(false);
+        ball.body.enable = false;
+      }
+    });
+
+    // All balls gone → lose life
+    if (!this.balls.some(b => b.active)) {
       this.lives -= 1;
       this.livesText.text = 'Lives: ' + this.lives;
-
-      // reset the ball position
-      this.resetBall();
+      this.resetPowerUps();
+      this.activateBall(this.balls[0], this.paddle.x, this.paddle.y - 40, true);
     }
 
-    // we out of bricks? reset for now.
-    // TODO: load next level?
-    if (!this.bricks.countLiving()) {
-      this.loadBricks();
+    // Level clear — reset all bricks
+    const activeBricks = this.brickObjects.filter(b => b.active).length;
+    if (activeBricks === 0) {
+      this.resetBricks();
     }
 
-    // TODO: game over if we are out of lives
+    // Game over
     if (this.lives < 1) {
       this.restartGame();
     }
-  },
-  pauseToggle: function() {
-    game.physics.arcade.isPaused = (game.physics.arcade.isPaused) ? false : true;
-    this.pauseText.visible = game.physics.arcade.isPaused;
-    // toggle music TODO
-    // this.music.mute();
-  },
-  releaseBall: function() {
-    if (this.ball.startPos === true)
-    {
-      this.ball.startPos = false;
-      this.ball.body.velocity.y = -300;
-      this.ball.body.velocity.x = -75;
-      this.startText.visible = false;
-    }
-  },
-  resetBall: function() {
-    this.ball.startPos = true;
-    this.ball.reset(this.world.centerX, this.paddle.y - 40);
-    this.ball.body.velocity.x = 300;
-  },
-  hit: function(ball, brick) {
-    // this.sfx.box.play();
-    brick.body.gravity.y = 300;
-  },
-  brickVsPaddle: function(brick, paddle) {
-    // TODO: decrease paddle size down by some factor to a lower limit
-  },
-  explodeBrick: function(bullet, brick) {
-    bullet.kill();
-
-    // is this brick falling?
-    if (brick.body.gravity.y > 0) {
-      // this.sfx.hit.play();
-
-      this.score += 100;
-      this.scoreText.text = 'score: ' + this.score;
-
-      // TODO: increase paddle size up by some factor to a max
-
-      // shake shake shake
-      game.camera.shake(0.005, 200);
-
-      var amount, start, step, i, angle, speed;
-      amount = 12;
-      start = Math.PI * -1;
-      step = Math.PI / amount * 2;
-      i = amount;
-      while (i > 0) {
-        shrapnel = this.explosion.getFirstDead();
-        if (shrapnel) {
-          shrapnel.reset(brick.body.x, brick.body.y);
-          var angle = start + i * step;
-          speed = 200;
-          shrapnel.body.velocity.x = Math.cos(angle) * speed;
-          shrapnel.body.velocity.y = Math.sin(angle) * speed;
-          shrapnel.alpha = 1;
-          game.add.tween(shrapnel).to( { alpha: 0 }, 1000, Phaser.Easing.Linear.None, true, 0, 1000, true);
-        }
-        i--;
-      }
-
-      // kill it
-      brick.kill();
-    }
-  },
-  // ball hits paddle
-  paddleHit: function(paddle, ball) {
-    // this.sfx.hit.play();
-    var diff = 0;
-
-    if (ball.x < paddle.x)
-    {
-      // left side
-      diff = paddle.x - ball.x;
-      ball.body.velocity.x = (-5 * (diff/2));
-    }
-    else if (ball.x > paddle.x)
-    {
-      // right side
-      diff = ball.x -paddle.x;
-      ball.body.velocity.x = (5 * (diff/2));
-    }
-    else
-    {
-      // middle?
-      ball.body.velocity.x = 2 + Math.random() * 8;
-    }
-  },
-  loadBricks:  function() {
-    // Create a group that will contain all the bricks
-    this.bricks = game.add.group();
-
-    // Add bricks to the group (10 columns and 6 lines)
-    for (var i = 0; i < 10; i++) {
-      for (var j = 0; j < 6; j++) {
-        // Create the brick at the correct position
-        var brick = game.add.sprite(55 + i * 60, 55 + j * 35, this.box);
-
-        // Make sure the brick won't move when the ball hits it
-        brick.body.immovable = true;
-
-        // auto kill bricks you miss
-        brick.autoCull = true;
-        brick.outOfCameraBoundsKill = true;
-
-        // Add the brick to the group
-        this.bricks.add(brick);
-        this.bricks.centerX = this.world.centerX;
-        // this.bricks.centerY = ;
-      }
-    }
-  },
-  restartGame: function() {
-    // this.music.stop();
-    game.state.start('main');
   }
+
+  releaseBall() {
+    this.balls.forEach(ball => {
+      if (ball.active && ball.startPos) {
+        ball.startPos = false;
+        ball.body.setVelocity(-75, -300);
+      }
+    });
+    this.startText.setVisible(false);
+  }
+
+  fireBullet() {
+    const now = this.time.now;
+    if (now - this.lastFired < this.fireRate) return;
+    this.lastFired = now;
+
+    const bullet = this.bulletObjects.find(b => !b.active);
+    if (bullet) {
+      bullet.setPosition(this.paddle.x, this.paddle.y - 20);
+      bullet.setActive(true).setVisible(true);
+      bullet.body.enable = true;
+      bullet.body.reset(this.paddle.x, this.paddle.y - 20);
+      bullet.body.setVelocityY(-this.bulletSpeed);
+    }
+  }
+
+  hit(ball, brick) {
+    brick.isFalling = true;
+    brick.body.setImmovable(false);
+    brick.body.setAllowGravity(true);
+  }
+
+  brickVsPaddle(brick, paddle) {
+    // TODO: decrease paddle size by some factor to a lower limit
+  }
+
+  explodeBrick(bullet, brick) {
+    // Only explode bricks that are actively falling
+    if (!brick.isFalling) return;
+
+    // Kill bullet
+    bullet.setActive(false).setVisible(false);
+    bullet.body.enable = false;
+
+    // Score
+    this.score += 100;
+    this.scoreText.text = 'Score: ' + this.score;
+
+    // Camera shake
+    this.cameras.main.shake(200, 0.005);
+
+    // Shrapnel burst in a circle
+    const amount = 12;
+    const step = (Math.PI * 2) / amount;
+    for (let i = 0; i < amount; i++) {
+      const shrapnel = this.shrapnelPool.find(s => !s.active);
+      if (shrapnel) {
+        shrapnel.setAlpha(1);
+        shrapnel.setActive(true).setVisible(true);
+        shrapnel.body.enable = true;
+        shrapnel.body.reset(brick.x, brick.y);
+        const angle = i * step;
+        shrapnel.body.setVelocity(
+          Math.cos(angle) * 200,
+          Math.sin(angle) * 200
+        );
+        this.tweens.add({
+          targets: shrapnel,
+          alpha: 0,
+          duration: 1000,
+          onComplete: () => {
+            shrapnel.setActive(false).setVisible(false);
+            shrapnel.body.enable = false;
+          }
+        });
+      }
+    }
+
+    // Kill brick
+    brick.setActive(false).setVisible(false);
+    brick.body.enable = false;
+  }
+
+  paddleHit(paddle, ball) {
+    const diff = ball.x - paddle.x;
+    if (Math.abs(diff) < 5) {
+      ball.body.setVelocityX(2 + Math.random() * 8);
+    } else {
+      ball.body.setVelocityX(5 * diff);
+    }
+  }
+
+  pauseToggle() {
+    if (this.physics.world.isPaused) {
+      this.physics.world.resume();
+    } else {
+      this.physics.world.pause();
+    }
+    this.pauseText.setVisible(this.physics.world.isPaused);
+  }
+
+  restartGame() {
+    this.scene.restart();
+  }
+
+  activateBall(ball, x, y, startPos = false) {
+    ball.setActive(true).setVisible(true);
+    ball.body.enable = true;
+    ball.body.reset(x, y);
+    ball.startPos = startPos;
+    if (startPos) {
+      ball.body.setVelocityX(300);
+    } else {
+      ball.body.setVelocity(-75, -300);
+    }
+  }
+
+  resetPowerUps() {
+    this.paddle.setSize(this.paddleBaseWidth, 15);
+    this.paddle.body.setSize(this.paddleBaseWidth, 15);
+    this.paddleSpeed = 500;
+    this.fireRate = 200;
+    this.balls.slice(1).forEach(b => {
+      b.setActive(false).setVisible(false);
+      b.body.enable = false;
+    });
+  }
+}
+
+const config = {
+  type: Phaser.AUTO,
+  width: window.innerWidth,
+  height: window.innerHeight,
+  transparent: true,
+  physics: {
+    default: 'arcade',
+    arcade: {
+      gravity: { y: 300 },
+      debug: false
+    }
+  },
+  scene: MainState
 };
 
-// Initialize the game and start our state
-var game = new Phaser.Game(window.outerWidth, window.outerHeight, Phaser.AUTO);
-game.transparent = true;
-game.state.add('main', mainState);
-game.state.start('main');
+const game = new Phaser.Game(config);
