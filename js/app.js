@@ -278,9 +278,10 @@ class MainState extends Phaser.Scene {
     pu.setActive(true).setVisible(true);
     pu.body.enable = true;
     pu.body.reset(x, y);
+    pu.body.setVelocityY(150);
   }
 
-  collectPowerUp(paddle, powerUp) {
+  collectPowerUp(powerUp, paddle) {
     powerUp.setActive(false).setVisible(false);
     powerUp.body.enable = false;
     // effects implemented in next task
@@ -338,14 +339,14 @@ class MainState extends Phaser.Scene {
       }
     }
 
-    // Power-up drop — 33% chance when a falling brick is shot
+    // Kill brick first
+    brick.setActive(false).setVisible(false);
+    brick.body.enable = false;
+
+    // Power-up drop — 33% chance
     if (Math.random() < 0.33) {
       this.spawnPowerUp(brick.x, brick.y);
     }
-
-    // Kill brick
-    brick.setActive(false).setVisible(false);
-    brick.body.enable = false;
   }
 
   paddleHit(paddle, ball) {
@@ -383,6 +384,12 @@ class MainState extends Phaser.Scene {
   }
 
   resetPowerUps() {
+    this.powerUps.forEach(pu => {
+      if (pu.active) {
+        pu.setActive(false).setVisible(false);
+        pu.body.enable = false;
+      }
+    });
     this.paddle.setSize(this.paddleBaseWidth, 15);
     this.paddle.body.setSize(this.paddleBaseWidth, 15);
     this.paddle.body.setOffset(0, 0);
