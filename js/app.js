@@ -310,7 +310,7 @@ class MainState extends Phaser.Scene {
   }
 
   activateMultiBall() {
-    const activeBalls = this.balls.filter(b => b.active);
+    const activeBalls = this.balls.filter(b => b.active && !b.startPos);
     const inactiveBalls = this.balls.filter(b => !b.active);
     activeBalls.forEach(ball => {
       const extra = inactiveBalls.shift();
@@ -319,7 +319,7 @@ class MainState extends Phaser.Scene {
         extra.body.enable = true;
         extra.body.reset(ball.x, ball.y);
         extra.startPos = false;
-        extra.body.setVelocity(-ball.body.velocity.x, -300);
+        extra.body.setVelocity(-ball.body.velocity.x, ball.body.velocity.y);
       }
     });
   }
