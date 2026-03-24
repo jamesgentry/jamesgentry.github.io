@@ -315,6 +315,7 @@ class MainState extends Phaser.Scene {
   }
 
   resetBricks() {
+    this.playTone('level-up');
     this.level += 1;
     this.levelText.text = 'Level: ' + this.level;
     this.ballSpeed = Math.min(this.ballSpeed + 20, 500);
@@ -502,6 +503,7 @@ class MainState extends Phaser.Scene {
   }
 
   collectPowerUp(powerUp, paddle) {
+    this.playTone('powerup');
     powerUp.setActive(false).setVisible(false);
     powerUp.body.enable = false;
 
@@ -563,6 +565,7 @@ class MainState extends Phaser.Scene {
 
   hit(ball, brick) {
     this.cameras.main.shake(150, 0.006); // NEW
+    this.playTone('hit-brick');
     brick.isFalling = true;
     brick.body.setImmovable(false);
     brick.body.setAllowGravity(true);
@@ -581,6 +584,7 @@ class MainState extends Phaser.Scene {
   }
 
   loseLife() {
+    this.playTone('life-lost');
     this.lives -= 1;
     this.livesText.text = 'Lives: ' + this.lives;
     this.checkHighScore();
@@ -610,6 +614,7 @@ class MainState extends Phaser.Scene {
   explodeBrick(bullet, brick) {
     // Only explode bricks that are actively falling
     if (!brick.isFalling) return;
+    this.playTone('explode');
 
     // Kill bullet
     bullet.setActive(false).setVisible(false);
@@ -662,6 +667,7 @@ class MainState extends Phaser.Scene {
   }
 
   paddleHit(paddle, ball) {
+    this.playTone('hit-paddle');
     const diff = ball.x - paddle.x;
     if (Math.abs(diff) < 5) {
       ball.body.setVelocityX(2 + Math.random() * 8);
@@ -680,6 +686,57 @@ class MainState extends Phaser.Scene {
     } else {
       this.musicText.setText('♪ M: sound off').setStyle({ fill: '#557799' });
     }
+  }
+
+  playTone(name) {
+    if (this.sound.mute) return;
+    const ctx = this.sound.context;
+    if (!ctx || ctx.state === 'suspended') return;
+
+    // level-up: 3-note fanfare C5→E5→G5
+    if (name === 'level-up') {
+      [523, 659, 784].forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        const t = ctx.currentTime + i * 0.1;
+        gain.gain.setValueAtTime(0.4, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+        osc.start(t);
+        osc.stop(t + 0.12);
+      });
+      return;
+    }
+
+    const sounds = {
+      'hit-brick':  { freq: 220, type: 'square',   dur: 0.06, vol: 0.3 },
+      'hit-paddle': { freq: 180, type: 'sine',      dur: 0.08, vol: 0.3 },
+      'explode':    { freq: 80,  type: 'sawtooth',  dur: 0.10, vol: 0.4, freqEnd: 30 },
+      'powerup':    { freq: 400, type: 'sine',      dur: 0.15, vol: 0.5, freqEnd: 600 },
+      'life-lost':  { freq: 440, type: 'square',    dur: 0.40, vol: 0.5, freqEnd: 110 },
+      'enemy-die':  { freq: 300, type: 'square',    dur: 0.05, vol: 0.3 },
+      'shield-hit': { freq: 600, type: 'triangle',  dur: 0.10, vol: 0.4, freqEnd: 200 },
+    };
+
+    const s = sounds[name];
+    if (!s) return;
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = s.type;
+    osc.frequency.setValueAtTime(s.freq, ctx.currentTime);
+    if (s.freqEnd !== undefined) {
+      osc.frequency.exponentialRampToValueAtTime(s.freqEnd, ctx.currentTime + s.dur);
+    }
+    gain.gain.setValueAtTime(s.vol, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + s.dur);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + s.dur + 0.01);
   }
 
   pauseToggle() {
@@ -705,6 +762,7 @@ class MainState extends Phaser.Scene {
   }
 
   shootEnemy(bullet, enemy) {
+    this.playTone('enemy-die');
     bullet.setActive(false).setVisible(false);
     bullet.body.enable = false;
     enemy.setActive(false).setVisible(false);
