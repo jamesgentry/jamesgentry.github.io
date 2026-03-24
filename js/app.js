@@ -529,22 +529,25 @@ class MainState extends Phaser.Scene {
     const pool = this.enemies.filter(e => !e.active);
     let idx = 0;
 
-    // Dive-bombers: evenly spaced across x=80 to W-80, y=-30
+    // Dive-bombers
     for (let i = 0; i < diverCount; i++) {
+      if (!pool[idx]) break;
       const x = diverCount === 1 ? W / 2 : 80 + ((W - 160) / (diverCount - 1)) * i;
       this.activateEnemy(pool[idx++], 'diver', x, -30, 0xff6600, 50);
     }
 
-    // Wanderers: same X range, y=-60
+    // Wanderers
     for (let i = 0; i < wanderCount; i++) {
+      if (!pool[idx]) break;
       const x = wanderCount === 1 ? W / 2 : 80 + ((W - 160) / (wanderCount - 1)) * i;
       this.activateEnemy(pool[idx++], 'wander', x, -60, 0xaa00ff, 75);
     }
 
-    // Formation movers: 5 evenly spaced across center 60% of screen, y=40
+    // Formation movers
     const formStart = W * 0.2;
     const formEnd = W * 0.8;
     for (let i = 0; i < formationCount; i++) {
+      if (!pool[idx]) break;
       const x = formationCount === 1 ? W / 2 : formStart + ((formEnd - formStart) / (formationCount - 1)) * i;
       this.activateEnemy(pool[idx++], 'formation', x, 40, 0xff0044, 100);
     }
@@ -567,6 +570,13 @@ class MainState extends Phaser.Scene {
         e.body.setVelocityX(this.formationDir * speed);
       }
       // 'diver' velocity is set once on spawn; no per-frame update needed
+
+      // Fire timer
+      e.fireTimer -= delta;
+      if (e.fireTimer <= 0) {
+        this.fireEnemyBullet(e.x, e.y);
+        e.fireTimer = Phaser.Math.Between(3000, 6000);
+      }
     });
 
     // Formation edge flip — once per frame, not per enemy
