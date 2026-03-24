@@ -79,6 +79,32 @@ class MainState extends Phaser.Scene {
       this.bulletObjects.push(b);
     }
 
+    // --- Enemy pool (30 enemies, type-driven) ---
+    this.enemies = [];
+    for (let i = 0; i < 30; i++) {
+      const e = this.add.rectangle(-200, -200, 18, 18, 0xffffff);
+      this.physics.add.existing(e);
+      e.setActive(false).setVisible(false);
+      e.body.enable = false;
+      e.body.setAllowGravity(false);
+      e.type = null;
+      e.angle = 0;
+      e.fireTimer = 0;
+      e.pointValue = 0;
+      this.enemies.push(e);
+    }
+
+    // --- Enemy bullet pool ---
+    this.enemyBullets = [];
+    for (let i = 0; i < 20; i++) {
+      const b = this.add.rectangle(-200, -200, 4, 12, 0xffff00);
+      this.physics.add.existing(b);
+      b.setActive(false).setVisible(false);
+      b.body.enable = false;
+      b.body.setAllowGravity(false);
+      this.enemyBullets.push(b);
+    }
+
     // --- Power-up pool ---
     this.powerUps = [];
     for (let i = 0; i < 10; i++) {
@@ -132,6 +158,12 @@ class MainState extends Phaser.Scene {
     this.physics.add.overlap(this.brickObjects, this.paddle, this.brickVsPaddle, null, this);
     this.physics.add.overlap(this.bulletObjects, this.brickObjects, this.explodeBrick, null, this);
     this.physics.add.overlap(this.powerUps, this.paddle, this.collectPowerUp, null, this);
+    // Player bullets kill enemies
+    this.physics.add.overlap(this.bulletObjects, this.enemies, this.shootEnemy, null, this);
+    // Enemy bullets shrink paddle
+    this.physics.add.overlap(this.enemyBullets, this.paddle, this.enemyBulletHit, null, this);
+    // Enemy body hitting paddle: destroy enemy + shrink paddle
+    this.physics.add.overlap(this.enemies, this.paddle, this.enemyHitsPaddle, null, this);
 
     // --- Camera flash on start ---
     this.cameras.main.flash(2000, 255, 255, 255);
@@ -200,6 +232,8 @@ class MainState extends Phaser.Scene {
       this.fireBullet();
     }
 
+    this.updateEnemies(delta);
+
     // Kill bullets that exit the top
     this.bulletObjects.forEach(b => {
       if (b.active && b.y < -20) {
@@ -213,6 +247,22 @@ class MainState extends Phaser.Scene {
       if (brick.active && brick.y > H + 50) {
         brick.setActive(false).setVisible(false);
         brick.body.enable = false;
+      }
+    });
+
+    // Deactivate enemies that exit bottom of screen
+    this.enemies.forEach(e => {
+      if (e.active && e.y > H + 30) {
+        e.setActive(false).setVisible(false);
+        e.body.enable = false;
+      }
+    });
+
+    // Deactivate enemy bullets that exit bottom of screen
+    this.enemyBullets.forEach(b => {
+      if (b.active && b.y > H + 20) {
+        b.setActive(false).setVisible(false);
+        b.body.enable = false;
       }
     });
 
@@ -422,6 +472,30 @@ class MainState extends Phaser.Scene {
 
   restartGame() {
     this.scene.restart();
+  }
+
+  shootEnemy(bullet, enemy) {
+    // implemented in Task 4
+  }
+
+  enemyBulletHit(enemyBullet, paddle) {
+    // implemented in Task 4
+  }
+
+  enemyHitsPaddle(enemy, paddle) {
+    // implemented in Task 4
+  }
+
+  updateEnemies(delta) {
+    // implemented in Tasks 3 & 4
+  }
+
+  spawnEnemies(level) {
+    // implemented in Task 3
+  }
+
+  fireEnemyBullet(x, y) {
+    // implemented in Task 4
   }
 
   activateBall(ball, x, y, startPos = false) {
