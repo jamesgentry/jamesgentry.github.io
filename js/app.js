@@ -12,9 +12,79 @@ const POWERUP_COLORS = {
   life:  0xff88cc  // pink
 };
 
+// Each entry is 6 rows × 10 cols, '1' = active brick, '0' = gap
+const PATTERNS = [
+  // Level 1 — tutorial: single row (6 bricks)
+  ['0000000000',
+   '0000000000',
+   '0011111100',
+   '0000000000',
+   '0000000000',
+   '0000000000'],
+  // Level 2 — small cluster: 3 rows, center 6 (18 bricks)
+  ['0000000000',
+   '0011111100',
+   '0111111110',
+   '0011111100',
+   '0000000000',
+   '0000000000'],
+  // Level 3 — inverted pyramid (30 bricks)
+  ['1111111111',
+   '0111111110',
+   '0011111100',
+   '0001111000',
+   '0000110000',
+   '0000000000'],
+  // Level 4 — checkerboard (30 bricks)
+  ['1010101010',
+   '0101010101',
+   '1010101010',
+   '0101010101',
+   '1010101010',
+   '0101010101'],
+  // Level 5 — hollow frame (28 bricks)
+  ['1111111111',
+   '1000000001',
+   '1000000001',
+   '1000000001',
+   '1000000001',
+   '1111111111'],
+  // Level 6 — full grid (60 bricks)
+  ['1111111111',
+   '1111111111',
+   '1111111111',
+   '1111111111',
+   '1111111111',
+   '1111111111'],
+];
+
+// [from-color, to-color] for body gradient — cycles with levels
+const BG_GRADIENTS = [
+  ['#00E5FF', '#311B92'], // Level 1 — cyan → deep purple   (default)
+  ['#FF6B35', '#4A0030'], // Level 2 — orange → dark magenta
+  ['#00FF99', '#003322'], // Level 3 — neon green → dark teal
+  ['#FF44CC', '#220055'], // Level 4 — hot pink → deep purple
+  ['#FFCC00', '#441100'], // Level 5 — gold → dark ember
+  ['#00AAFF', '#000833'], // Level 6 — electric blue → near black
+];
+
+const PATTERN_COLORS = [
+  0x88ccff, // Level 1 — soft blue
+  0xffaa44, // Level 2 — orange
+  0xcc66ff, // Level 3 — purple
+  0x44ff88, // Level 4 — green
+  0xff4466, // Level 5 — red
+  0xffdd00, // Level 6 — gold
+];
+
 class MainState extends Phaser.Scene {
   constructor() {
     super({ key: 'MainState' });
+  }
+
+  preload() {
+    this.load.on('loaderror', () => {}); // silently skip missing assets
+    this.load.audio('music', 'assets/music.mp3');
   }
 
   create() {
@@ -58,6 +128,8 @@ class MainState extends Phaser.Scene {
     // --- Bricks (pre-created, pooled) ---
     this.brickObjects = [];
     this.initBricks(centerX);
+    this.applyPattern(1);
+    this.setBackground(1);
 
     // --- Explosion shrapnel pool ---
     this.shrapnelPool = [];
@@ -129,17 +201,43 @@ class MainState extends Phaser.Scene {
       font: '20px ' + fontBold, fill: '#ffffff'
     }).setOrigin(0.5, 0);
     this.startText = this.add.text(centerX, centerY,
-      'Press UP to start\nSPACE to shoot   DOWN to pause', {
+      'Press UP to start\nSPACE to shoot   DOWN to pause   M to toggle sound', {
       font: '24px Bungee', fill: '#ffffff', align: 'center'
     }).setOrigin(0.5, 0.5);
     this.pauseText = this.add.text(centerX, centerY, 'Paused', {
       font: '30px ' + fontBold, fill: '#ffffff', align: 'center'
     }).setOrigin(0.5, 0.5).setVisible(false);
 
+    // --- Power-up legend (shown on start screen, hidden on launch) ---
+    const legendY = centerY + 100;
+    const puDefs = [
+      { label: 'Wide Paddle', color: '#00ffff' },
+      { label: 'Speed Boost', color: '#ffff00' },
+      { label: 'Multi-Ball',  color: '#00ff00' },
+      { label: 'Laser Burst', color: '#ff4444' },
+      { label: 'Extra Life',  color: '#ff88cc' },
+    ];
+    this.legend = [];
+    this.legend.push(this.add.text(centerX, legendY - 24, '— POWER-UPS —', {
+      font: '14px Bungee', fill: '#aaaaaa', align: 'center'
+    }).setOrigin(0.5, 0));
+    const itemW = 120;
+    const totalW = puDefs.length * itemW;
+    puDefs.forEach((pu, idx) => {
+      const x = centerX - totalW / 2 + idx * itemW + itemW / 2;
+      this.legend.push(this.add.text(x, legendY, '■', {
+        font: '18px Bungee', fill: pu.color
+      }).setOrigin(0.5, 0));
+      this.legend.push(this.add.text(x, legendY + 22, pu.label, {
+        font: '11px Bungee', fill: '#cccccc', align: 'center'
+      }).setOrigin(0.5, 0));
+    });
+
     // --- Keyboard ---
     this.cursors = this.input.keyboard.createCursorKeys();
     this.fireKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     this.restartKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
+    this.musicKey  = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.M);
 
     // Prevent browser scroll on game keys
     this.input.keyboard.addCapture([
@@ -152,6 +250,20 @@ class MainState extends Phaser.Scene {
 
     this.cursors.down.on('down', this.pauseToggle, this);
     this.restartKey.on('down', this.restartGame, this);
+    this.musicKey.on('down', this.toggleMusic, this);
+
+    // --- Music + SFX (all audio off by default) ---
+    this.sound.mute = true;           // global mute covers music + all future SFX
+    this.musicOn = false;
+    if (this.cache.audio.exists('music')) {
+      this.music = this.sound.add('music', { loop: true, volume: 0.5 });
+      // Don't play yet — wait for first M keypress (user gesture unlocks AudioContext)
+    } else {
+      this.music = null;
+    }
+    this.musicText = this.add.text(W / 2, H - 24, '♪ M: sound off', {
+      font: '13px Bungee', fill: '#557799'
+    }).setOrigin(0.5, 0);
 
     // --- Colliders (registered once, persist across frames) ---
     this.physics.add.collider(this.paddle, this.balls, this.paddleHit, null, this);
@@ -174,14 +286,16 @@ class MainState extends Phaser.Scene {
 
   initBricks(centerX) {
     const startX = centerX - (COLS * (BOX_W + 4)) / 2 + BOX_W / 2;
-    for (let i = 0; i < COLS; i++) {
-      for (let j = 0; j < ROWS; j++) {
-        const x = startX + i * (BOX_W + 4);
-        const y = 60 + j * (BOX_H + 8);
+    for (let col = 0; col < COLS; col++) {
+      for (let row = 0; row < ROWS; row++) {
+        const x = startX + col * (BOX_W + 4);
+        const y = 60 + row * (BOX_H + 8);
         const brick = this.add.rectangle(x, y, BOX_W, BOX_H, 0xffffff);
         this.physics.add.existing(brick);
         brick.body.setImmovable(true);
         brick.body.setAllowGravity(false);
+        brick.setActive(false).setVisible(false);
+        brick.body.enable = false;
         brick.initX = x;
         brick.initY = y;
         brick.isFalling = false;
@@ -191,19 +305,11 @@ class MainState extends Phaser.Scene {
   }
 
   resetBricks() {
-    this.brickObjects.forEach(brick => {
-      brick.setPosition(brick.initX, brick.initY);
-      brick.setActive(true).setVisible(true);
-      brick.body.reset(brick.initX, brick.initY);
-      brick.body.enable = true;
-      brick.body.setImmovable(true);
-      brick.body.setAllowGravity(false);
-      brick.body.setVelocity(0, 0);
-      brick.isFalling = false;
-    });
     this.level += 1;
     this.levelText.text = 'Level: ' + this.level;
     this.ballSpeed = Math.min(this.ballSpeed + 20, 500);
+    this.applyPattern(this.level);
+    this.setBackground(this.level);
     this.enemies.forEach(e => {
       if (e.active) { e.setActive(false).setVisible(false); e.body.enable = false; }
     });
@@ -212,6 +318,35 @@ class MainState extends Phaser.Scene {
     });
     if (this.level >= 3) {
       this.spawnEnemies(this.level);
+    }
+  }
+
+  setBackground(level) {
+    const [from, to] = BG_GRADIENTS[(level - 1) % BG_GRADIENTS.length];
+    document.body.style.background = `linear-gradient(to top left, ${from}, ${to})`;
+  }
+
+  applyPattern(level) {
+    const pattern = PATTERNS[(level - 1) % PATTERNS.length];
+    const color = PATTERN_COLORS[(level - 1) % PATTERN_COLORS.length];
+    for (let col = 0; col < COLS; col++) {
+      for (let row = 0; row < ROWS; row++) {
+        const brick = this.brickObjects[col * ROWS + row];
+        const active = pattern[row][col] === '1';
+        brick.isFalling = false;
+        if (active) {
+          brick.setFillStyle(color);
+          brick.setActive(true).setVisible(true);
+          brick.body.reset(brick.initX, brick.initY);
+          brick.body.enable = true;
+          brick.body.setImmovable(true);
+          brick.body.setAllowGravity(false);
+          brick.body.setVelocity(0, 0);
+        } else {
+          brick.setActive(false).setVisible(false);
+          brick.body.enable = false;
+        }
+      }
     }
   }
 
@@ -326,6 +461,7 @@ class MainState extends Phaser.Scene {
       }
     });
     this.startText.setVisible(false);
+    this.legend.forEach(o => o.setVisible(false));
   }
 
   fireBullet() {
@@ -477,6 +613,18 @@ class MainState extends Phaser.Scene {
       ball.body.setVelocityX(2 + Math.random() * 8);
     } else {
       ball.body.setVelocityX(5 * diff);
+    }
+  }
+
+  toggleMusic() {
+    this.musicOn = !this.musicOn;
+    this.sound.mute = !this.musicOn;
+    if (this.musicOn) {
+      // First M press acts as the user gesture that unlocks the AudioContext
+      if (this.music && !this.music.isPlaying) this.music.play();
+      this.musicText.setText('♪ M: sound on').setStyle({ fill: '#aaddff' });
+    } else {
+      this.musicText.setText('♪ M: sound off').setStyle({ fill: '#557799' });
     }
   }
 
