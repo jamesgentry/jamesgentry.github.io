@@ -114,6 +114,7 @@ class MainState extends Phaser.Scene {
 
     // Rounded paddle graphic — draws over the invisible physics rectangle
     this.paddleGfx = this.add.graphics();
+    this.paddleGfx.setDepth(10);
     this.paddle.setVisible(false); // physics rect is now the invisible hitbox only
 
     // --- Ball pool (1 main + 2 extras for multi-ball) ---
@@ -364,7 +365,7 @@ class MainState extends Phaser.Scene {
 
     // Redraw rounded paddle visual
     const pw = this.paddle.width * this.paddle.scaleX;
-    const ph = 15 * this.paddle.scaleY;
+    const ph = this.paddle.height * this.paddle.scaleY;
     this.paddleGfx.clear();
     this.paddleGfx.fillStyle(0xffffff);
     this.paddleGfx.fillRoundedRect(
@@ -528,6 +529,7 @@ class MainState extends Phaser.Scene {
     }
 
     // Paddle pulse — cosmetic feedback on any power-up collect
+    this.tweens.killTweensOf(this.paddle);
     this.tweens.add({
       targets: this.paddle,
       scaleX: 1.15, scaleY: 1.15,
