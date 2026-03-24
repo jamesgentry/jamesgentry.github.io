@@ -210,6 +210,9 @@ class MainState extends Phaser.Scene {
     this.enemyBullets.forEach(b => {
       if (b.active) { b.setActive(false).setVisible(false); b.body.enable = false; }
     });
+    if (this.level >= 3) {
+      this.spawnEnemies(this.level);
+    }
   }
 
   update(time, delta) {
@@ -493,12 +496,92 @@ class MainState extends Phaser.Scene {
     // implemented in Task 4
   }
 
-  updateEnemies(delta) {
-    // implemented in Tasks 3 & 4
+  activateEnemy(e, type, x, y, color, pointValue) {
+    e.type = type;
+    e.pointValue = pointValue;
+    e.fireTimer = Phaser.Math.Between(2000, 5000);
+    e.setFillStyle(color);
+    e.setActive(true).setVisible(true);
+    e.body.enable = true;
+    e.body.reset(x, y);
+    e.body.setAllowGravity(false);
+    if (type === 'diver') {
+      e.body.setVelocityY(120);
+    } else if (type === 'wander') {
+      e.waveAngle = Math.random() * Math.PI * 2;
+    }
   }
 
   spawnEnemies(level) {
-    // implemented in Task 3
+    this.formationDir = 1;
+    const W = this.scale.width;
+
+    // Determine counts per type
+    let diverCount = 0, wanderCount = 0, formationCount = 0;
+    if (level === 3) {
+      diverCount = 4;
+    } else if (level === 4) {
+      diverCount = 3; wanderCount = 3;
+    } else {
+      diverCount = 2; wanderCount = 2; formationCount = 5;
+    }
+
+    const pool = this.enemies.filter(e => !e.active);
+    let idx = 0;
+
+    // Dive-bombers: evenly spaced across x=80 to W-80, y=-30
+    for (let i = 0; i < diverCount; i++) {
+      const x = diverCount === 1 ? W / 2 : 80 + ((W - 160) / (diverCount - 1)) * i;
+      this.activateEnemy(pool[idx++], 'diver', x, -30, 0xff6600, 50);
+    }
+
+    // Wanderers: same X range, y=-60
+    for (let i = 0; i < wanderCount; i++) {
+      const x = wanderCount === 1 ? W / 2 : 80 + ((W - 160) / (wanderCount - 1)) * i;
+      this.activateEnemy(pool[idx++], 'wander', x, -60, 0xaa00ff, 75);
+    }
+
+    // Formation movers: 5 evenly spaced across center 60% of screen, y=40
+    const formStart = W * 0.2;
+    const formEnd = W * 0.8;
+    for (let i = 0; i < formationCount; i++) {
+      const x = formationCount === 1 ? W / 2 : formStart + ((formEnd - formStart) / (formationCount - 1)) * i;
+      this.activateEnemy(pool[idx++], 'formation', x, 40, 0xff0044, 100);
+    }
+  }
+
+  updateEnemies(delta) {
+    const W = this.scale.width;
+
+    this.enemies.forEach(e => {
+      if (!e.active) return;
+
+      if (e.type === 'wander') {
+        e.waveAngle += delta * 0.003;
+        e.body.setVelocity(
+          Math.sin(e.waveAngle) * 150,
+          80
+        );
+      } else if (e.type === 'formation') {
+        const speed = 60 + this.level * 5;
+        e.body.setVelocityX(this.formationDir * speed);
+      }
+      // 'diver' velocity is set once on spawn; no per-frame update needed
+    });
+
+    // Formation edge flip — once per frame, not per enemy
+    const anyAtEdge = this.enemies.some(e =>
+      e.active && e.type === 'formation' && (e.x < 50 || e.x > W - 50)
+    );
+    if (anyAtEdge) {
+      this.formationDir *= -1;
+      this.enemies.forEach(e => {
+        if (e.active && e.type === 'formation') {
+          const clampedX = Phaser.Math.Clamp(e.x, 60, W - 60);
+          e.body.reset(clampedX, e.y + 15);
+        }
+      });
+    }
   }
 
   fireEnemyBullet(x, y) {
