@@ -1,316 +1,671 @@
-var mainState = {
-  preload: function() {
+const BOX_W = 28;
+const BOX_H = 28;
+const BALL_SIZE = 16;
+const COLS = 10;
+const ROWS = 6;
 
-    // preload the assets
-    var boxWidth = 28
-    var boxHeight = 28
-    var paddleWidth = window.innerWidth / 3
-    var paddleHeight = 15
-    var ballWidth = 30
-    var ballHeight = 30
+const POWERUP_COLORS = {
+  wide:  0x00ffff, // cyan
+  fast:  0xffff00, // yellow
+  multi: 0x00ff00, // green
+  laser: 0xff4444, // red
+  life:  0xff88cc  // pink
+};
 
-    this.score = 0
-    this.lives = 3
+class MainState extends Phaser.Scene {
+  constructor() {
+    super({ key: 'MainState' });
+  }
 
-    // box
-    this.box = game.add.bitmapData(boxWidth, boxHeight);
-    this.box.ctx.beginPath();
-    this.box.ctx.rect(0, 0, boxWidth, boxHeight);
-    this.box.ctx.fillStyle = '#ffffff';
-    this.box.ctx.fill();
+  create() {
+    const W = this.scale.width;
+    const H = this.scale.height;
+    const centerX = W / 2;
+    const centerY = H / 2;
 
-    // paddle
-    this.paddle = game.add.bitmapData(paddleWidth, paddleHeight);
-    this.paddle.ctx.beginPath();
-    this.paddle.ctx.rect(0, 0, paddleWidth, paddleHeight);
-    this.paddle.ctx.fillStyle = '#ffffff';
-    this.paddle.ctx.fill();
+    this.score = 0;
+    this.lives = 3;
+    this.lastFired = 0;
+    this.fireRate = 200;
+    this.bulletSpeed = 900;
+    this.level = 1;
+    this.ballSpeed = 300;
+    this.formationDir = 1;
+    this.paddleBaseWidth = W / 3;
+    this.paddleSpeed = 500;
 
-    // ball
-    this.ball = game.add.bitmapData(ballWidth, ballHeight);
-    this.ball.ctx.beginPath();
-    this.ball.ctx.arc(15, 15, 5, 0, Math.PI * 2, true);
-    this.ball.ctx.fillStyle = '#ffffff';
-    this.ball.ctx.fill();
+    // --- Paddle ---
+    this.paddle = this.add.rectangle(centerX, H - 20, W / 3, 15, 0xffffff);
+    this.physics.add.existing(this.paddle);
+    this.paddle.body.setImmovable(true);
+    this.paddle.body.setAllowGravity(false);
+    this.paddle.body.setCollideWorldBounds(true);
 
-    // bullet
-    this.bullet = game.add.bitmapData(30,30);
-    this.bullet.ctx.beginPath();
-    this.bullet.ctx.arc(15, 15, 5, 0, Math.PI*2, true);
-    this.bullet.ctx.fillStyle = '#ffffff';
-    this.bullet.ctx.fill();
+    // --- Ball pool (1 main + 2 extras for multi-ball) ---
+    this.balls = [];
+    for (let i = 0; i < 3; i++) {
+      const b = this.add.rectangle(-200, -200, BALL_SIZE, BALL_SIZE, 0xffffff);
+      this.physics.add.existing(b);
+      b.body.setBounce(1);
+      b.body.setAllowGravity(false);
+      b.body.setCollideWorldBounds(true);
+      b.setActive(false).setVisible(false);
+      b.body.enable = false;
+      b.startPos = false;
+      this.balls.push(b);
+    }
 
-    // shrapnel
-    this.shrapnel = game.add.bitmapData(30,30);
-    this.shrapnel.ctx.beginPath();
-    this.shrapnel.ctx.arc(15, 15, 5, 0, Math.PI*2, true);
-    this.shrapnel.ctx.fillStyle = '#ffffff';
-    this.shrapnel.ctx.fill();
+    // --- Bricks (pre-created, pooled) ---
+    this.brickObjects = [];
+    this.initBricks(centerX);
 
-    // sounds
-    game.load.audio('hit', 'audio/hit.wav');
-    game.load.audio('box', 'audio/box.wav');
-    game.load.audio('song', 'audio/aujou.mp3');
-  },
-  create: function() {
-    // Start the Arcade physics system (for movements and collisions)
-    game.physics.startSystem(Phaser.Physics.ARCADE);
-    game.physics.arcade.checkCollision.down = false;
-    game.world.enableBody = true;
+    // --- Explosion shrapnel pool ---
+    this.shrapnelPool = [];
+    for (let i = 0; i < 100; i++) {
+      const s = this.add.rectangle(-200, -200, 10, 10, 0xffffff);
+      this.physics.add.existing(s);
+      s.setActive(false).setVisible(false);
+      s.body.enable = false;
+      this.shrapnelPool.push(s);
+    }
 
-    this.sfx = {
-      hit: this.game.add.audio('hit'),
-      box: this.game.add.audio('box')
-    };
+    // --- Bullet pool ---
+    this.bulletObjects = [];
+    for (let i = 0; i < 30; i++) {
+      const b = this.add.rectangle(-200, -200, 6, 14, 0xffffff);
+      this.physics.add.existing(b);
+      b.setActive(false).setVisible(false);
+      b.body.enable = false;
+      b.body.setAllowGravity(false);
+      this.bulletObjects.push(b);
+    }
 
-    // text
-    var fontFamily = 'Bungee Shade'
-    this.scoreText = game.add.text(10, 10, 'Score: ' + this.score, { font: "20px " + fontFamily, fill: "#ffffff", align: "left" });
-    this.livesText = game.add.text((window.innerWidth - 10), 10, 'Lives: ' + this.lives, { font: "20px " + fontFamily, fill: "#ffffff", align: "right" });
-    this.livesText.anchor.set(1,0);
-    this.startText = game.add.text(this.world.centerX, this.world.centerY, 'Press "UP" to start & "DOWN" to pause', { font: "30px Bungee", fill: "#ffffff", align: "center" });
-    this.pauseText = game.add.text(this.world.centerX, this.world.centerY, 'Paused', { font: "30px " + fontFamily, fill: "#ffffff", align: "center" });
-    this.startText.anchor.set(0.5, 0.5);
-    this.pauseText.anchor.set(0.5, 0.5);
-    this.pauseText.visible = false;
-    // this.startText.setShadow(2, 2, "#333333", 20, false, true);
+    // --- Enemy pool (30 enemies, type-driven) ---
+    this.enemies = [];
+    for (let i = 0; i < 30; i++) {
+      const e = this.add.rectangle(-200, -200, 18, 18, 0xffffff);
+      this.physics.add.existing(e);
+      e.setActive(false).setVisible(false);
+      e.body.enable = false;
+      e.body.setAllowGravity(false);
+      e.type = null;
+      e.waveAngle = 0;
+      e.fireTimer = 0;
+      e.pointValue = 0;
+      this.enemies.push(e);
+    }
 
-    // Create the left/right arrow keys
-    this.left = game.input.keyboard.addKey(Phaser.Keyboard.LEFT);
-    this.right = game.input.keyboard.addKey(Phaser.Keyboard.RIGHT);
-    this.up = game.input.keyboard.addKey(Phaser.Keyboard.UP);
-    this.fire = game.input.keyboard.addKey(Phaser.Keyboard.SPACEBAR);
-    this.pause = game.input.keyboard.addKey(Phaser.Keyboard.DOWN);
-    this.restart = game.input.keyboard.addKey(Phaser.Keyboard.R);
-    this.mute = game.input.keyboard.addKey(Phaser.Keyboard.M);
+    // --- Enemy bullet pool ---
+    this.enemyBullets = [];
+    for (let i = 0; i < 20; i++) {
+      const b = this.add.rectangle(-200, -200, 4, 12, 0xffff00);
+      this.physics.add.existing(b);
+      b.setActive(false).setVisible(false);
+      b.body.enable = false;
+      b.body.setAllowGravity(false);
+      this.enemyBullets.push(b);
+    }
 
-    // down to pause game
-    this.pause.onDown.add(this.pauseToggle, this);
+    // --- Power-up pool ---
+    this.powerUps = [];
+    for (let i = 0; i < 10; i++) {
+      const pu = this.add.rectangle(-200, -200, 20, 12, 0xffffff);
+      this.physics.add.existing(pu);
+      pu.setActive(false).setVisible(false);
+      pu.body.enable = false;
+      pu.type = null;
+      this.powerUps.push(pu);
+    }
 
-    // r to restart the game
-    this.restart.onDown.add(this.restartGame, this);
+    // --- Text ---
+    const fontBold = 'Bungee Shade';
+    this.scoreText = this.add.text(10, 10, 'Score: ' + this.score, {
+      font: '20px ' + fontBold, fill: '#ffffff'
+    });
+    this.livesText = this.add.text(W - 10, 10, 'Lives: ' + this.lives, {
+      font: '20px ' + fontBold, fill: '#ffffff'
+    }).setOrigin(1, 0);
+    this.levelText = this.add.text(W / 2, 10, 'Level: 1', {
+      font: '20px ' + fontBold, fill: '#ffffff'
+    }).setOrigin(0.5, 0);
+    this.startText = this.add.text(centerX, centerY,
+      'Press UP to start\nSPACE to shoot   DOWN to pause', {
+      font: '24px Bungee', fill: '#ffffff', align: 'center'
+    }).setOrigin(0.5, 0.5);
+    this.pauseText = this.add.text(centerX, centerY, 'Paused', {
+      font: '30px ' + fontBold, fill: '#ffffff', align: 'center'
+    }).setOrigin(0.5, 0.5).setVisible(false);
 
-    // add the paddle at the bottom of the screen
-    this.paddle = game.add.sprite(this.world.centerX, (window.innerHeight - 5), this.paddle);
-    this.paddle.anchor.set(0.5, 0.5);
-    // paddle can't leave the world bounds
-    this.paddle.body.collideWorldBounds = true;
-    // make sure the paddle won't move when it hits the ball
-    this.paddle.body.immovable = true;
+    // --- Keyboard ---
+    this.cursors = this.input.keyboard.createCursorKeys();
+    this.fireKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+    this.restartKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
 
-    game.camera.follow(this.paddle, Phaser.Camera.FOLLOW_LOCKON, 0.1, 0.1);
-    game.camera.flash(0xffffff, 2000);
+    // Prevent browser scroll on game keys
+    this.input.keyboard.addCapture([
+      Phaser.Input.Keyboard.KeyCodes.SPACE,
+      Phaser.Input.Keyboard.KeyCodes.UP,
+      Phaser.Input.Keyboard.KeyCodes.DOWN,
+      Phaser.Input.Keyboard.KeyCodes.LEFT,
+      Phaser.Input.Keyboard.KeyCodes.RIGHT,
+    ]);
 
-    this.loadBricks();
+    this.cursors.down.on('down', this.pauseToggle, this);
+    this.restartKey.on('down', this.restartGame, this);
 
-    // add the ball
-    this.ball = game.add.sprite(this.world.centerX, this.paddle.y -40, this.ball);
-    this.ball.startPos = true;
-    // give the ball some initial speed
-    this.ball.body.velocity.x = 300;
-    this.ball.body.tilePadding.x = 0;
-    this.ball.body.tilePadding.y = 0;
-    this.ball.body.bounce.setTo(1);
-    this.ball.body.collideWorldBounds = true;
+    // --- Colliders (registered once, persist across frames) ---
+    this.physics.add.collider(this.paddle, this.balls, this.paddleHit, null, this);
+    this.physics.add.collider(this.balls, this.brickObjects, this.hit, null, this);
+    this.physics.add.overlap(this.brickObjects, this.paddle, this.brickVsPaddle, null, this);
+    this.physics.add.overlap(this.bulletObjects, this.brickObjects, this.explodeBrick, null, this);
+    this.physics.add.overlap(this.powerUps, this.paddle, this.collectPowerUp, null, this);
+    // Player bullets kill enemies
+    this.physics.add.overlap(this.bulletObjects, this.enemies, this.shootEnemy, null, this);
+    // Enemy bullets shrink paddle
+    this.physics.add.overlap(this.enemyBullets, this.paddle, this.enemyBulletHit, null, this);
+    // Enemy body hitting paddle: destroy enemy + shrink paddle
+    this.physics.add.overlap(this.enemies, this.paddle, this.enemyHitsPaddle, null, this);
 
-    // explosion
-    this.explosion = game.add.group();
-    this.explosion.enableBody = true;
-    this.explosion.physicsBodyType = Phaser.Physics.ARCADE;
-    this.explosion.createMultiple(100, this.shrapnel);
-    this.explosion.callAll('body.setSize', 'body', 10, 10, 10, 10);
-    this.explosion.setAll('checkWorldBounds', true);
-    this.explosion.setAll('outOfBoundsKill', true);
-    this.explosion.setAll('anchor.x', 0.5);
-    this.explosion.setAll('anchor.y', 0.5);
+    // --- Camera flash on start ---
+    this.cameras.main.flash(2000, 255, 255, 255);
 
-    // 30 bullets
-    this.weapon = this.game.add.weapon(30, this.bullet);
-    // bullet killed when it leaves world bounds
-    this.weapon.bulletKillType = Phaser.Weapon.KILL_WORLD_BOUNDS;
-    // bullet speed
-    this.weapon.bulletSpeed = 900;
-    // rate of fire
-    this.weapon.fireRate = 200;
-    // track the paddle
-    this.weapon.trackSprite(this.paddle, 0, 0, false);
+    this.activateBall(this.balls[0], centerX, this.paddle.y - 40, true);
+  }
 
-    this.music = this.game.add.audio('song', 0.5, true);
-    // this.music.play();
-  },
-  update: function() {
-    if (this.ball.startPos && this.up.isDown) {
+  initBricks(centerX) {
+    const startX = centerX - (COLS * (BOX_W + 4)) / 2 + BOX_W / 2;
+    for (let i = 0; i < COLS; i++) {
+      for (let j = 0; j < ROWS; j++) {
+        const x = startX + i * (BOX_W + 4);
+        const y = 60 + j * (BOX_H + 8);
+        const brick = this.add.rectangle(x, y, BOX_W, BOX_H, 0xffffff);
+        this.physics.add.existing(brick);
+        brick.body.setImmovable(true);
+        brick.body.setAllowGravity(false);
+        brick.initX = x;
+        brick.initY = y;
+        brick.isFalling = false;
+        this.brickObjects.push(brick);
+      }
+    }
+  }
+
+  resetBricks() {
+    this.brickObjects.forEach(brick => {
+      brick.setPosition(brick.initX, brick.initY);
+      brick.setActive(true).setVisible(true);
+      brick.body.reset(brick.initX, brick.initY);
+      brick.body.enable = true;
+      brick.body.setImmovable(true);
+      brick.body.setAllowGravity(false);
+      brick.body.setVelocity(0, 0);
+      brick.isFalling = false;
+    });
+    this.level += 1;
+    this.levelText.text = 'Level: ' + this.level;
+    this.ballSpeed = Math.min(this.ballSpeed + 20, 500);
+    this.enemies.forEach(e => {
+      if (e.active) { e.setActive(false).setVisible(false); e.body.enable = false; }
+    });
+    this.enemyBullets.forEach(b => {
+      if (b.active) { b.setActive(false).setVisible(false); b.body.enable = false; }
+    });
+    if (this.level >= 3) {
+      this.spawnEnemies(this.level);
+    }
+  }
+
+  update(time, delta) {
+    const H = this.scale.height;
+
+    // Keep startPos balls aligned with paddle
+    this.balls.forEach(ball => {
+      if (ball.active && ball.startPos) ball.setX(this.paddle.x);
+    });
+
+    // Release ball on UP
+    if (this.cursors.up.isDown && this.balls.some(b => b.active && b.startPos)) {
       this.releaseBall();
     }
 
-    // move with pointer
-    // this.paddle.body.x = game.input.activePointer.x;
-    // or
-    // Move the paddle left/right when an arrow key is pressed
-    if (this.left.isDown) this.paddle.body.velocity.x = -500;
-    else if (this.right.isDown) this.paddle.body.velocity.x = 500;
-    // Stop the paddle when no key is pressed
-    else this.paddle.body.velocity.x = 0;
-
-    if (this.fire.isDown) {
-      this.weapon.fire();
-      // TODO: find good short sound for this
-      // this.sfx.hit.play();
+    // Paddle movement
+    if (this.cursors.left.isDown) {
+      this.paddle.body.setVelocityX(-this.paddleSpeed);
+    } else if (this.cursors.right.isDown) {
+      this.paddle.body.setVelocityX(this.paddleSpeed);
+    } else {
+      this.paddle.body.setVelocityX(0);
     }
 
-    // all collisions
-    // collisions between the paddle and the ball
-    game.physics.arcade.collide(this.paddle, this.ball, this.paddleHit, null, this);
-    // when the ball hits a brick
-    game.physics.arcade.collide(this.ball, this.bricks, this.hit, null, this);
-    // we die if brick hits us
-    game.physics.arcade.overlap(this.bricks, this.paddle, this.brickVsPaddle, null, this);
-    // block explodes if we shoot it while it's falling
-    game.physics.arcade.overlap(this.weapon.bullets, this.bricks, this.explodeBrick, null, this);
+    // Fire bullets
+    if (this.fireKey.isDown) {
+      this.fireBullet();
+    }
 
-    // ball is below the paddle!
-    if (this.ball.y > this.paddle.y) {
+    if (!this.physics.world.isPaused) {
+      this.updateEnemies(delta);
+    }
 
-      // get your consequence
-      // reduce lives?
+    // Kill bullets that exit the top
+    this.bulletObjects.forEach(b => {
+      if (b.active && b.y < -20) {
+        b.setActive(false).setVisible(false);
+        b.body.enable = false;
+      }
+    });
+
+    // Kill bricks that fall off screen
+    this.brickObjects.forEach(brick => {
+      if (brick.active && brick.y > H + 50) {
+        brick.setActive(false).setVisible(false);
+        brick.body.enable = false;
+      }
+    });
+
+    // Deactivate enemies that exit bottom of screen
+    this.enemies.forEach(e => {
+      if (e.active && e.y > H + 30) {
+        e.setActive(false).setVisible(false);
+        e.body.enable = false;
+      }
+    });
+
+    // Deactivate enemy bullets that exit bottom of screen
+    this.enemyBullets.forEach(b => {
+      if (b.active && b.y > H + 20) {
+        b.setActive(false).setVisible(false);
+        b.body.enable = false;
+      }
+    });
+
+    // Kill power-ups that fall off screen
+    this.powerUps.forEach(pu => {
+      if (pu.active && pu.y > H + 20) {
+        pu.setActive(false).setVisible(false);
+        pu.body.enable = false;
+      }
+    });
+
+    // Level clear — reset all bricks (check BEFORE life-loss so they can't both fire)
+    const activeBricks = this.brickObjects.filter(b => b.active).length;
+    if (activeBricks === 0) {
+      this.resetBricks();
+      return;
+    }
+
+    // Detect missed balls
+    this.balls.forEach(ball => {
+      if (ball.active && ball.y > this.paddle.y + 40) {
+        ball.setActive(false).setVisible(false);
+        ball.body.enable = false;
+      }
+    });
+
+    // All balls gone → lose life
+    if (!this.balls.some(b => b.active)) {
       this.lives -= 1;
       this.livesText.text = 'Lives: ' + this.lives;
-
-      // reset the ball position
-      this.resetBall();
+      this.resetPowerUps();
+      this.enemyBullets.forEach(b => {
+        if (b.active) { b.setActive(false).setVisible(false); b.body.enable = false; }
+      });
+      this.activateBall(this.balls[0], this.paddle.x, this.paddle.y - 40, true);
     }
 
-    // we out of bricks? reset for now.
-    // TODO: load next level?
-    if (!this.bricks.countLiving()) {
-      this.loadBricks();
-    }
-
-    // TODO: game over if we are out of lives
+    // Game over
     if (this.lives < 1) {
       this.restartGame();
     }
-  },
-  pauseToggle: function() {
-    game.physics.arcade.isPaused = (game.physics.arcade.isPaused) ? false : true;
-    this.pauseText.visible = game.physics.arcade.isPaused;
-    // toggle music TODO
-    // this.music.mute();
-  },
-  releaseBall: function() {
-    if (this.ball.startPos === true)
-    {
-      this.ball.startPos = false;
-      this.ball.body.velocity.y = -300;
-      this.ball.body.velocity.x = -75;
-      this.startText.visible = false;
-    }
-  },
-  resetBall: function() {
-    this.ball.startPos = true;
-    this.ball.reset(this.world.centerX, this.paddle.y - 40);
-    this.ball.body.velocity.x = 300;
-  },
-  hit: function(ball, brick) {
-    // this.sfx.box.play();
-    brick.body.gravity.y = 300;
-  },
-  brickVsPaddle: function(brick, paddle) {
-    // TODO: decrease paddle size down by some factor to a lower limit
-  },
-  explodeBrick: function(bullet, brick) {
-    bullet.kill();
-
-    // is this brick falling?
-    if (brick.body.gravity.y > 0) {
-      // this.sfx.hit.play();
-
-      this.score += 100;
-      this.scoreText.text = 'score: ' + this.score;
-
-      // TODO: increase paddle size up by some factor to a max
-
-      // shake shake shake
-      game.camera.shake(0.005, 200);
-
-      var amount, start, step, i, angle, speed;
-      amount = 12;
-      start = Math.PI * -1;
-      step = Math.PI / amount * 2;
-      i = amount;
-      while (i > 0) {
-        shrapnel = this.explosion.getFirstDead();
-        if (shrapnel) {
-          shrapnel.reset(brick.body.x, brick.body.y);
-          var angle = start + i * step;
-          speed = 200;
-          shrapnel.body.velocity.x = Math.cos(angle) * speed;
-          shrapnel.body.velocity.y = Math.sin(angle) * speed;
-          shrapnel.alpha = 1;
-          game.add.tween(shrapnel).to( { alpha: 0 }, 1000, Phaser.Easing.Linear.None, true, 0, 1000, true);
-        }
-        i--;
-      }
-
-      // kill it
-      brick.kill();
-    }
-  },
-  // ball hits paddle
-  paddleHit: function(paddle, ball) {
-    // this.sfx.hit.play();
-    var diff = 0;
-
-    if (ball.x < paddle.x)
-    {
-      // left side
-      diff = paddle.x - ball.x;
-      ball.body.velocity.x = (-5 * (diff/2));
-    }
-    else if (ball.x > paddle.x)
-    {
-      // right side
-      diff = ball.x -paddle.x;
-      ball.body.velocity.x = (5 * (diff/2));
-    }
-    else
-    {
-      // middle?
-      ball.body.velocity.x = 2 + Math.random() * 8;
-    }
-  },
-  loadBricks:  function() {
-    // Create a group that will contain all the bricks
-    this.bricks = game.add.group();
-
-    // Add bricks to the group (10 columns and 6 lines)
-    for (var i = 0; i < 10; i++) {
-      for (var j = 0; j < 6; j++) {
-        // Create the brick at the correct position
-        var brick = game.add.sprite(55 + i * 60, 55 + j * 35, this.box);
-
-        // Make sure the brick won't move when the ball hits it
-        brick.body.immovable = true;
-
-        // auto kill bricks you miss
-        brick.autoCull = true;
-        brick.outOfCameraBoundsKill = true;
-
-        // Add the brick to the group
-        this.bricks.add(brick);
-        this.bricks.centerX = this.world.centerX;
-        // this.bricks.centerY = ;
-      }
-    }
-  },
-  restartGame: function() {
-    // this.music.stop();
-    game.state.start('main');
   }
+
+  releaseBall() {
+    this.balls.forEach(ball => {
+      if (ball.active && ball.startPos) {
+        ball.startPos = false;
+        ball.body.setVelocity(-75, -this.ballSpeed);
+      }
+    });
+    this.startText.setVisible(false);
+  }
+
+  fireBullet() {
+    const now = this.time.now;
+    if (now - this.lastFired < this.fireRate) return;
+    this.lastFired = now;
+
+    const bullet = this.bulletObjects.find(b => !b.active);
+    if (bullet) {
+      bullet.setPosition(this.paddle.x, this.paddle.y - 20);
+      bullet.setActive(true).setVisible(true);
+      bullet.body.enable = true;
+      bullet.body.reset(this.paddle.x, this.paddle.y - 20);
+      bullet.body.setVelocityY(-this.bulletSpeed);
+    }
+  }
+
+  spawnPowerUp(x, y) {
+    const types = ['wide', 'fast', 'multi', 'laser', 'life'];
+    const pu = this.powerUps.find(p => !p.active);
+    if (!pu) return;
+    pu.type = Phaser.Utils.Array.GetRandom(types);
+    pu.setFillStyle(POWERUP_COLORS[pu.type]);
+    pu.setActive(true).setVisible(true);
+    pu.body.enable = true;
+    pu.body.reset(x, y);
+    pu.body.setVelocityY(150);
+  }
+
+  collectPowerUp(powerUp, paddle) {
+    powerUp.setActive(false).setVisible(false);
+    powerUp.body.enable = false;
+
+    switch (powerUp.type) {
+      case 'wide': {
+        const newW = Math.min(this.paddle.width * 1.5, this.scale.width / 2);
+        this.paddle.setSize(newW, 15);
+        this.paddle.body.setSize(newW, 15);
+        this.paddle.body.setOffset(0, 0);
+        break;
+      }
+      case 'fast':
+        this.paddleSpeed = 800;
+        break;
+      case 'multi':
+        this.activateMultiBall();
+        break;
+      case 'laser':
+        this.fireRate = 50;
+        break;
+      case 'life':
+        this.lives = Math.min(this.lives + 1, 5);
+        this.livesText.text = 'Lives: ' + this.lives;
+        break;
+    }
+  }
+
+  activateMultiBall() {
+    const activeBalls = this.balls.filter(b => b.active && !b.startPos);
+    const inactiveBalls = this.balls.filter(b => !b.active);
+    activeBalls.forEach(ball => {
+      const extra = inactiveBalls.shift();
+      if (extra) {
+        extra.setActive(true).setVisible(true);
+        extra.body.enable = true;
+        extra.body.reset(ball.x, ball.y);
+        extra.startPos = false;
+        extra.body.setVelocity(-ball.body.velocity.x, ball.body.velocity.y);
+      }
+    });
+  }
+
+  hit(ball, brick) {
+    brick.isFalling = true;
+    brick.body.setImmovable(false);
+    brick.body.setAllowGravity(true);
+  }
+
+  shrinkPaddle(paddle) {
+    const minW = 80;
+    const newW = Math.max(paddle.width * 0.85, minW);
+    paddle.setSize(newW, 15);
+    paddle.body.setSize(newW, 15);
+    paddle.body.setOffset(0, 0);
+  }
+
+  brickVsPaddle(brick, paddle) {
+    if (!brick.isFalling) return;
+    this.shrinkPaddle(paddle);
+    brick.setActive(false).setVisible(false);
+    brick.body.enable = false;
+  }
+
+  explodeBrick(bullet, brick) {
+    // Only explode bricks that are actively falling
+    if (!brick.isFalling) return;
+
+    // Kill bullet
+    bullet.setActive(false).setVisible(false);
+    bullet.body.enable = false;
+
+    // Score
+    this.score += 100;
+    this.scoreText.text = 'Score: ' + this.score;
+
+    // Camera shake
+    this.cameras.main.shake(200, 0.005);
+
+    // Shrapnel burst in a circle
+    const amount = 12;
+    const step = (Math.PI * 2) / amount;
+    for (let i = 0; i < amount; i++) {
+      const shrapnel = this.shrapnelPool.find(s => !s.active);
+      if (shrapnel) {
+        shrapnel.setAlpha(1);
+        shrapnel.setActive(true).setVisible(true);
+        shrapnel.body.enable = true;
+        shrapnel.body.reset(brick.x, brick.y);
+        const angle = i * step;
+        shrapnel.body.setVelocity(
+          Math.cos(angle) * 200,
+          Math.sin(angle) * 200
+        );
+        this.tweens.add({
+          targets: shrapnel,
+          alpha: 0,
+          duration: 1000,
+          onComplete: () => {
+            shrapnel.setActive(false).setVisible(false);
+            shrapnel.body.enable = false;
+          }
+        });
+      }
+    }
+
+    // Kill brick first
+    brick.setActive(false).setVisible(false);
+    brick.body.enable = false;
+
+    // Power-up drop — 33% chance
+    if (Math.random() < 0.33) {
+      this.spawnPowerUp(brick.x, brick.y);
+    }
+  }
+
+  paddleHit(paddle, ball) {
+    const diff = ball.x - paddle.x;
+    if (Math.abs(diff) < 5) {
+      ball.body.setVelocityX(2 + Math.random() * 8);
+    } else {
+      ball.body.setVelocityX(5 * diff);
+    }
+  }
+
+  pauseToggle() {
+    if (this.physics.world.isPaused) {
+      this.physics.world.resume();
+    } else {
+      this.physics.world.pause();
+    }
+    this.pauseText.setVisible(this.physics.world.isPaused);
+  }
+
+  restartGame() {
+    this.scene.restart();
+  }
+
+  shootEnemy(bullet, enemy) {
+    bullet.setActive(false).setVisible(false);
+    bullet.body.enable = false;
+    enemy.setActive(false).setVisible(false);
+    enemy.body.enable = false;
+    this.score += enemy.pointValue;
+    this.scoreText.text = 'Score: ' + this.score;
+  }
+
+  enemyBulletHit(enemyBullet, paddle) {
+    enemyBullet.setActive(false).setVisible(false);
+    enemyBullet.body.enable = false;
+    this.shrinkPaddle(paddle);
+  }
+
+  enemyHitsPaddle(enemy, paddle) {
+    enemy.setActive(false).setVisible(false);
+    enemy.body.enable = false;
+    this.shrinkPaddle(paddle);
+  }
+
+  activateEnemy(e, type, x, y, color, pointValue) {
+    e.type = type;
+    e.pointValue = pointValue;
+    e.fireTimer = Phaser.Math.Between(2000, 5000);
+    e.setFillStyle(color);
+    e.setActive(true).setVisible(true);
+    e.body.enable = true;
+    e.body.reset(x, y);
+    e.body.setAllowGravity(false);
+    if (type === 'diver') {
+      e.body.setVelocityY(120);
+    } else if (type === 'wander') {
+      e.waveAngle = Math.random() * Math.PI * 2;
+    }
+  }
+
+  spawnEnemies(level) {
+    this.formationDir = 1;
+    const W = this.scale.width;
+
+    // Determine counts per type
+    let diverCount = 0, wanderCount = 0, formationCount = 0;
+    if (level === 3) {
+      diverCount = 4;
+    } else if (level === 4) {
+      diverCount = 3; wanderCount = 3;
+    } else {
+      diverCount = 2; wanderCount = 2; formationCount = 5;
+    }
+
+    const pool = this.enemies.filter(e => !e.active);
+    let idx = 0;
+
+    // Dive-bombers
+    for (let i = 0; i < diverCount; i++) {
+      if (!pool[idx]) break;
+      const x = diverCount === 1 ? W / 2 : 80 + ((W - 160) / (diverCount - 1)) * i;
+      this.activateEnemy(pool[idx++], 'diver', x, -30, 0xff6600, 50);
+    }
+
+    // Wanderers
+    for (let i = 0; i < wanderCount; i++) {
+      if (!pool[idx]) break;
+      const x = wanderCount === 1 ? W / 2 : 80 + ((W - 160) / (wanderCount - 1)) * i;
+      this.activateEnemy(pool[idx++], 'wander', x, -60, 0xaa00ff, 75);
+    }
+
+    // Formation movers
+    const formStart = W * 0.2;
+    const formEnd = W * 0.8;
+    for (let i = 0; i < formationCount; i++) {
+      if (!pool[idx]) break;
+      const x = formationCount === 1 ? W / 2 : formStart + ((formEnd - formStart) / (formationCount - 1)) * i;
+      this.activateEnemy(pool[idx++], 'formation', x, 40, 0xff0044, 100);
+    }
+  }
+
+  updateEnemies(delta) {
+    const W = this.scale.width;
+
+    this.enemies.forEach(e => {
+      if (!e.active) return;
+
+      if (e.type === 'wander') {
+        e.waveAngle += delta * 0.003;
+        e.body.setVelocity(
+          Math.sin(e.waveAngle) * 150,
+          80
+        );
+      } else if (e.type === 'formation') {
+        const speed = 60 + this.level * 5;
+        e.body.setVelocityX(this.formationDir * speed);
+      }
+      // 'diver' velocity is set once on spawn; no per-frame update needed
+
+      // Fire timer
+      e.fireTimer -= delta;
+      if (e.fireTimer <= 0) {
+        this.fireEnemyBullet(e.x, e.y);
+        e.fireTimer = Phaser.Math.Between(3000, 6000);
+      }
+    });
+
+    // Formation edge flip — once per frame, not per enemy
+    const anyAtEdge = this.enemies.some(e =>
+      e.active && e.type === 'formation' && (e.x < 50 || e.x > W - 50)
+    );
+    if (anyAtEdge) {
+      this.formationDir *= -1;
+      this.enemies.forEach(e => {
+        if (e.active && e.type === 'formation') {
+          const clampedX = Phaser.Math.Clamp(e.x, 60, W - 60);
+          e.body.reset(clampedX, e.y + 15);
+        }
+      });
+    }
+  }
+
+  fireEnemyBullet(x, y) {
+    const b = this.enemyBullets.find(b => !b.active);
+    if (!b) return;
+    b.setActive(true).setVisible(true);
+    b.body.enable = true;
+    b.body.reset(x, y);
+    b.body.setAllowGravity(false);
+    b.body.setVelocityY(400);
+  }
+
+  activateBall(ball, x, y, startPos = false) {
+    ball.setActive(true).setVisible(true);
+    ball.body.enable = true;
+    ball.body.reset(x, y);
+    ball.startPos = startPos;
+    if (startPos) {
+      ball.body.setVelocity(0, 0);  // held in place; launch handled by releaseBall()
+    } else {
+      ball.body.setVelocity(-75, -this.ballSpeed);
+    }
+  }
+
+  resetPowerUps() {
+    this.powerUps.forEach(pu => {
+      if (pu.active) {
+        pu.setActive(false).setVisible(false);
+        pu.body.enable = false;
+      }
+    });
+    this.paddle.setSize(this.paddleBaseWidth, 15);
+    this.paddle.body.setSize(this.paddleBaseWidth, 15);
+    this.paddle.body.setOffset(0, 0);
+    this.paddleSpeed = 500;
+    this.fireRate = 200;
+    this.balls.slice(1).forEach(b => {
+      b.setActive(false).setVisible(false);
+      b.body.enable = false;
+    });
+  }
+}
+
+const config = {
+  type: Phaser.AUTO,
+  width: window.innerWidth,
+  height: window.innerHeight,
+  transparent: true,
+  physics: {
+    default: 'arcade',
+    arcade: {
+      gravity: { y: 300 },
+      debug: false
+    }
+  },
+  scene: MainState
 };
 
-// Initialize the game and start our state
-var game = new Phaser.Game(window.outerWidth, window.outerHeight, Phaser.AUTO);
-game.transparent = true;
-game.state.add('main', mainState);
-game.state.start('main');
+const game = new Phaser.Game(config);
