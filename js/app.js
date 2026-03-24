@@ -399,13 +399,17 @@ class MainState extends Phaser.Scene {
     brick.body.setAllowGravity(true);
   }
 
-  brickVsPaddle(brick, paddle) {
-    if (!brick.isFalling) return;
+  shrinkPaddle(paddle) {
     const minW = 80;
     const newW = Math.max(paddle.width * 0.85, minW);
     paddle.setSize(newW, 15);
     paddle.body.setSize(newW, 15);
     paddle.body.setOffset(0, 0);
+  }
+
+  brickVsPaddle(brick, paddle) {
+    if (!brick.isFalling) return;
+    this.shrinkPaddle(paddle);
     brick.setActive(false).setVisible(false);
     brick.body.enable = false;
   }
@@ -496,21 +500,13 @@ class MainState extends Phaser.Scene {
   enemyBulletHit(enemyBullet, paddle) {
     enemyBullet.setActive(false).setVisible(false);
     enemyBullet.body.enable = false;
-    const minW = 80;
-    const newW = Math.max(paddle.width * 0.85, minW);
-    paddle.setSize(newW, 15);
-    paddle.body.setSize(newW, 15);
-    paddle.body.setOffset(0, 0);
+    this.shrinkPaddle(paddle);
   }
 
   enemyHitsPaddle(enemy, paddle) {
     enemy.setActive(false).setVisible(false);
     enemy.body.enable = false;
-    const minW = 80;
-    const newW = Math.max(paddle.width * 0.85, minW);
-    paddle.setSize(newW, 15);
-    paddle.body.setSize(newW, 15);
-    paddle.body.setOffset(0, 0);
+    this.shrinkPaddle(paddle);
   }
 
   activateEnemy(e, type, x, y, color, pointValue) {
