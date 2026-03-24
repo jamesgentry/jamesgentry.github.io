@@ -99,7 +99,7 @@ class MainState extends Phaser.Scene {
       font: '20px ' + fontBold, fill: '#ffffff'
     }).setOrigin(1, 0);
     this.levelText = this.add.text(W / 2, 10, 'Level: 1', {
-      font: '20px Bungee Shade', fill: '#ffffff'
+      font: '20px ' + fontBold, fill: '#ffffff'
     }).setOrigin(0.5, 0);
     this.startText = this.add.text(centerX, centerY,
       'Press UP to start\nSPACE to shoot   DOWN to pause', {
@@ -224,6 +224,13 @@ class MainState extends Phaser.Scene {
       }
     });
 
+    // Level clear — reset all bricks (check BEFORE life-loss so they can't both fire)
+    const activeBricks = this.brickObjects.filter(b => b.active).length;
+    if (activeBricks === 0) {
+      this.resetBricks();
+      return;
+    }
+
     // Detect missed balls
     this.balls.forEach(ball => {
       if (ball.active && ball.y > this.paddle.y + 40) {
@@ -238,12 +245,6 @@ class MainState extends Phaser.Scene {
       this.livesText.text = 'Lives: ' + this.lives;
       this.resetPowerUps();
       this.activateBall(this.balls[0], this.paddle.x, this.paddle.y - 40, true);
-    }
-
-    // Level clear — reset all bricks
-    const activeBricks = this.brickObjects.filter(b => b.active).length;
-    if (activeBricks === 0) {
-      this.resetBricks();
     }
 
     // Game over
@@ -431,7 +432,7 @@ class MainState extends Phaser.Scene {
     if (startPos) {
       ball.body.setVelocity(0, 0);  // held in place; launch handled by releaseBall()
     } else {
-      ball.body.setVelocity(-75, -300);
+      ball.body.setVelocity(-75, -this.ballSpeed);
     }
   }
 
