@@ -284,7 +284,44 @@ class MainState extends Phaser.Scene {
   collectPowerUp(powerUp, paddle) {
     powerUp.setActive(false).setVisible(false);
     powerUp.body.enable = false;
-    // effects implemented in next task
+
+    switch (powerUp.type) {
+      case 'wide': {
+        const newW = Math.min(this.paddle.width * 1.5, this.scale.width / 2);
+        this.paddle.setSize(newW, 15);
+        this.paddle.body.setSize(newW, 15);
+        this.paddle.body.setOffset(0, 0);
+        break;
+      }
+      case 'fast':
+        this.paddleSpeed = 800;
+        break;
+      case 'multi':
+        this.activateMultiBall();
+        break;
+      case 'laser':
+        this.fireRate = 50;
+        break;
+      case 'life':
+        this.lives = Math.min(this.lives + 1, 5);
+        this.livesText.text = 'Lives: ' + this.lives;
+        break;
+    }
+  }
+
+  activateMultiBall() {
+    const activeBalls = this.balls.filter(b => b.active);
+    const inactiveBalls = this.balls.filter(b => !b.active);
+    activeBalls.forEach(ball => {
+      const extra = inactiveBalls.shift();
+      if (extra) {
+        extra.setActive(true).setVisible(true);
+        extra.body.enable = true;
+        extra.body.reset(ball.x, ball.y);
+        extra.startPos = false;
+        extra.body.setVelocity(-ball.body.velocity.x, -300);
+      }
+    });
   }
 
   hit(ball, brick) {
