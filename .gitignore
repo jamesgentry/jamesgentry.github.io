@@ -109,5 +109,8 @@ dist
 .DS_Store
 
 docs/*
+!docs/superpowers/
+!docs/superpowers/**
 
-.claude
+.claude/*
+.superpowers/*
