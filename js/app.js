@@ -30,6 +30,7 @@ class MainState extends Phaser.Scene {
     this.bulletSpeed = 900;
     this.level = 1;
     this.ballSpeed = 300;
+    this.formationDir = 1;
     this.paddleBaseWidth = W / 3;
     this.paddleSpeed = 500;
 
@@ -88,7 +89,7 @@ class MainState extends Phaser.Scene {
       e.body.enable = false;
       e.body.setAllowGravity(false);
       e.type = null;
-      e.angle = 0;
+      e.waveAngle = 0;
       e.fireTimer = 0;
       e.pointValue = 0;
       this.enemies.push(e);
@@ -203,6 +204,12 @@ class MainState extends Phaser.Scene {
     this.level += 1;
     this.levelText.text = 'Level: ' + this.level;
     this.ballSpeed = Math.min(this.ballSpeed + 20, 500);
+    this.enemies.forEach(e => {
+      if (e.active) { e.setActive(false).setVisible(false); e.body.enable = false; }
+    });
+    this.enemyBullets.forEach(b => {
+      if (b.active) { b.setActive(false).setVisible(false); b.body.enable = false; }
+    });
   }
 
   update(time, delta) {
