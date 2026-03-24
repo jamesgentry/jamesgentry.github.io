@@ -112,6 +112,10 @@ class MainState extends Phaser.Scene {
     this.paddle.body.setAllowGravity(false);
     this.paddle.body.setCollideWorldBounds(true);
 
+    // Rounded paddle graphic — draws over the invisible physics rectangle
+    this.paddleGfx = this.add.graphics();
+    this.paddle.setVisible(false); // physics rect is now the invisible hitbox only
+
     // --- Ball pool (1 main + 2 extras for multi-ball) ---
     this.balls = [];
     for (let i = 0; i < 3; i++) {
@@ -358,6 +362,17 @@ class MainState extends Phaser.Scene {
   update(time, delta) {
     const H = this.scale.height;
 
+    // Redraw rounded paddle visual
+    const pw = this.paddle.width * this.paddle.scaleX;
+    const ph = 15 * this.paddle.scaleY;
+    this.paddleGfx.clear();
+    this.paddleGfx.fillStyle(0xffffff);
+    this.paddleGfx.fillRoundedRect(
+      this.paddle.x - pw / 2,
+      this.paddle.y - ph / 2,
+      pw, ph, 8
+    );
+
     // Keep startPos balls aligned with paddle
     this.balls.forEach(ball => {
       if (ball.active && ball.startPos) ball.setX(this.paddle.x);
@@ -443,18 +458,7 @@ class MainState extends Phaser.Scene {
 
     // All balls gone → lose life
     if (!this.balls.some(b => b.active)) {
-      this.lives -= 1;
-      this.livesText.text = 'Lives: ' + this.lives;
-      this.resetPowerUps();
-      this.enemyBullets.forEach(b => {
-        if (b.active) { b.setActive(false).setVisible(false); b.body.enable = false; }
-      });
-      this.activateBall(this.balls[0], this.paddle.x, this.paddle.y - 40, true);
-    }
-
-    // Game over
-    if (this.lives < 1) {
-      this.restartGame();
+      this.loseLife();
     }
   }
 
@@ -522,6 +526,22 @@ class MainState extends Phaser.Scene {
         this.livesText.text = 'Lives: ' + this.lives;
         break;
     }
+
+    // Paddle pulse — cosmetic feedback on any power-up collect
+    this.tweens.add({
+      targets: this.paddle,
+      scaleX: 1.15, scaleY: 1.15,
+      duration: 80,
+      ease: 'Quad.easeOut',
+      onComplete: () => {
+        this.tweens.add({
+          targets: this.paddle,
+          scaleX: 1.0, scaleY: 1.0,
+          duration: 120,
+          ease: 'Quad.easeIn'
+        });
+      }
+    });
   }
 
   activateMultiBall() {
@@ -540,6 +560,7 @@ class MainState extends Phaser.Scene {
   }
 
   hit(ball, brick) {
+    this.cameras.main.shake(150, 0.006); // NEW
     brick.isFalling = true;
     brick.body.setImmovable(false);
     brick.body.setAllowGravity(true);
@@ -547,17 +568,41 @@ class MainState extends Phaser.Scene {
 
   shrinkPaddle(paddle) {
     const minW = 80;
+    if (paddle.width <= minW) {
+      return true; // already at minimum — caller should trigger loseLife()
+    }
     const newW = Math.max(paddle.width * 0.85, minW);
     paddle.setSize(newW, 15);
     paddle.body.setSize(newW, 15);
     paddle.body.setOffset(0, 0);
+    return false;
+  }
+
+  loseLife() {
+    this.lives -= 1;
+    this.livesText.text = 'Lives: ' + this.lives;
+    this.checkHighScore();
+    this.resetPowerUps();
+    this.enemyBullets.forEach(b => {
+      if (b.active) { b.setActive(false).setVisible(false); b.body.enable = false; }
+    });
+    this.balls.forEach(b => {
+      b.setActive(false).setVisible(false);
+      b.body.enable = false;
+    });
+    if (this.lives < 1) {
+      this.restartGame();
+      return;
+    }
+    this.cameras.main.flash(500, 255, 0, 0, true);
+    this.activateBall(this.balls[0], this.paddle.x, this.paddle.y - 40, true);
   }
 
   brickVsPaddle(brick, paddle) {
     if (!brick.isFalling) return;
-    this.shrinkPaddle(paddle);
     brick.setActive(false).setVisible(false);
     brick.body.enable = false;
+    if (this.shrinkPaddle(paddle)) this.loseLife();
   }
 
   explodeBrick(bullet, brick) {
@@ -574,7 +619,7 @@ class MainState extends Phaser.Scene {
     this.checkHighScore();
 
     // Camera shake
-    this.cameras.main.shake(200, 0.005);
+    this.cameras.main.shake(300, 0.012);
 
     // Shrapnel burst in a circle
     const amount = 12;
@@ -583,6 +628,7 @@ class MainState extends Phaser.Scene {
       const shrapnel = this.shrapnelPool.find(s => !s.active);
       if (shrapnel) {
         shrapnel.setAlpha(1);
+        shrapnel.setFillStyle(brick.fillColor); // NEW — color match
         shrapnel.setActive(true).setVisible(true);
         shrapnel.body.enable = true;
         shrapnel.body.reset(brick.x, brick.y);
@@ -669,13 +715,13 @@ class MainState extends Phaser.Scene {
   enemyBulletHit(enemyBullet, paddle) {
     enemyBullet.setActive(false).setVisible(false);
     enemyBullet.body.enable = false;
-    this.shrinkPaddle(paddle);
+    if (this.shrinkPaddle(paddle)) this.loseLife();
   }
 
   enemyHitsPaddle(enemy, paddle) {
     enemy.setActive(false).setVisible(false);
     enemy.body.enable = false;
-    this.shrinkPaddle(paddle);
+    if (this.shrinkPaddle(paddle)) this.loseLife();
   }
 
   activateEnemy(e, type, x, y, color, pointValue) {
