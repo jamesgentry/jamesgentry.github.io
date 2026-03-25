@@ -58,11 +58,12 @@ Plays the flash sequence, then deactivates the brick. Called in place of the cur
 1. `brick.isFalling = true` — re-entry guard (must be set before any async steps)
 2. `brick.body.enable = false` — disable physics immediately so ball passes through
 3. `if (this.brickCrackGfx[idx]) this.brickCrackGfx[idx].clear()` — clear marker gfx
-4. Run 6-step color-toggle sequence using `this.time.delayedCall`, each step 100ms apart:
-   - Steps 1, 3, 5 (odd): `brick.setFillStyle(0xffffff)` — white
-   - Steps 2, 4, 6 (even): `brick.setFillStyle(originalColor)` — restore (captured before sequence starts as `brick.fillColor`)
-   - After step 6: `brick.setActive(false).setVisible(false)` — deactivate
-5. Total duration: ~600ms
+4. Run 6-step color-toggle sequence using a recursive `this.time.delayedCall` pattern, each subsequent step 100ms after the previous:
+   - Step 1 fires synchronously (t=0): `brick.setFillStyle(0xffffff)` — white immediately
+   - Steps 2, 4, 6 (even): `brick.setFillStyle(origColor)` — restore original color
+   - Steps 3, 5 (odd after 1): `brick.setFillStyle(0xffffff)` — white again
+   - After step 6 (t≈500ms): `brick.setActive(false).setVisible(false)` — deactivate
+5. Total duration: ~500ms (step 1 synchronous, steps 2–6 at 100ms intervals)
 
 **Implementation note:** Use a recursive `delayedCall` pattern:
 ```js
@@ -81,7 +82,7 @@ flashThenDeactivate(brick, idx) {
       brick.setActive(false).setVisible(false);
     }
   };
-  doStep();
+  doStep(); // step 1 fires immediately (brick turns white at t=0)
 }
 ```
 
@@ -97,7 +98,13 @@ When `neighbor.hp <= 0`:
 
 **Guard:** `flashThenDeactivate` sets `isFalling=true` as its first step — the existing `if (!neighbor.active || neighbor.isFalling) return` guard in the loop prevents double-processing.
 
-### Changes to `hitBrick(ball, brick)`
+**`nidx` source:** `nidx` is already computed one line earlier in `triggerExplosion` as `const nidx = this.brickObjects.indexOf(neighbor)` — the `flashThenDeactivate(neighbor, nidx)` call reuses that existing value.
+
+**Level-clear timing:** During a flash sequence, `brick.active` remains `true` until `setActive(false)` is called at the end of step 6. The level-clear check in `update()` (`activeBricks === 0 && !bossActive`) counts active bricks, so it will not trigger until all flashing bricks complete their animation. This is intentional and correct — the level advances only after the last brick visually disappears.
+
+### Changes to `hit(ball, brick)`
+
+The ball-vs-brick collision handler is named `hit` (not `hitBrick`) in `app.js`.
 
 When `brick.hp <= 0` and `brick.isExplosive`:
 - Call `this.triggerExplosion(brick)` (chain — unchanged)
@@ -105,6 +112,10 @@ When `brick.hp <= 0` and `brick.isExplosive`:
 - Do NOT call `body.setImmovable(false)` / `body.setAllowGravity(true)` on the hit brick
 
 When `brick.hp <= 0` and NOT explosive: existing fallaway behavior unchanged.
+
+### No changes to `explodeBrick(bullet, brick)`
+
+`explodeBrick` handles laser bullets hitting bricks. It fully deactivates the brick before calling `triggerExplosion` — the brick is already gone, so no flash is needed or appropriate. Any explosive neighbors discovered via the resulting chain are handled by `triggerExplosion` as normal.
 
 ---
 
