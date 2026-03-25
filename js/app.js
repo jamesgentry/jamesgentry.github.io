@@ -24,42 +24,42 @@ const SOUNDS = {
 
 // Each entry is 6 rows × 10 cols, '1' = active brick, '0' = gap
 const PATTERNS = [
-  // Level 1 — tutorial: single row (6 bricks)
-  ['0000000000',
-   '0000000000',
-   '0011111100',
-   '0000000000',
-   '0000000000',
-   '0000000000'],
-  // Level 2 — small cluster: 3 rows, center 6 (18 bricks)
-  ['0000000000',
-   '0011111100',
-   '0111111110',
-   '0011111100',
-   '0000000000',
-   '0000000000'],
-  // Level 3 — inverted pyramid (30 bricks)
+  // Level 1 — T-shape (28 bricks, all 1HP)
   ['1111111111',
-   '0111111110',
-   '0011111100',
-   '0001111000',
+   '1111111111',
    '0000110000',
+   '0000110000',
+   '0000110000',
+   '0000110000'],
+  // Level 2 — Diamond cluster (~38 bricks)
+  ['0011111100',
+   '0111111110',
+   '1111111111',
+   '0111111110',
+   '0011111100',
    '0000000000'],
-  // Level 4 — checkerboard (30 bricks)
-  ['1010101010',
-   '0101010101',
-   '1010101010',
-   '0101010101',
-   '1010101010',
-   '0101010101'],
-  // Level 5 — hollow frame (28 bricks)
+  // Level 3 — Chevron (~38 bricks)
+  ['1000000001',
+   '1100000011',
+   '1110000111',
+   '1111001111',
+   '1111111111',
+   '0111111110'],
+  // Level 4 — Cross + border (~44 bricks)
   ['1111111111',
-   '1000000001',
-   '1000000001',
-   '1000000001',
-   '1000000001',
+   '1000110001',
+   '1011111101',
+   '1011111101',
+   '1000110001',
    '1111111111'],
-  // Level 6 — full grid (60 bricks)
+  // Level 5 — Frame + fill (~48 bricks)
+  ['1111111111',
+   '1111111111',
+   '1100000011',
+   '1100000011',
+   '1111111111',
+   '1111111111'],
+  // Level 6 — Full grid (60 bricks)
   ['1111111111',
    '1111111111',
    '1111111111',
@@ -114,6 +114,8 @@ class MainState extends Phaser.Scene {
     this.formationDir = 1;
     this.paddleBaseWidth = W / 3;
     this.paddleSpeed = 500;
+    this.combo = 0;
+    this.comboMultiplier = 1;
 
     // --- Paddle ---
     this.paddle = this.add.rectangle(centerX, H - 20, W / 3, 15, 0xffffff);
@@ -227,6 +229,9 @@ class MainState extends Phaser.Scene {
     this.pauseText = this.add.text(centerX, centerY, 'Paused', {
       font: '30px ' + fontBold, fill: '#ffffff', align: 'center'
     }).setOrigin(0.5, 0.5).setVisible(false);
+    this.comboText = this.add.text(W / 2, H / 2, '', {
+      font: '56px Bungee Shade', fill: '#ffff00'
+    }).setOrigin(0.5, 0.5).setAlpha(0);
 
     // --- Power-up legend (shown on start screen, hidden on launch) ---
     const legendY = centerY + 100;
@@ -348,7 +353,8 @@ class MainState extends Phaser.Scene {
   }
 
   applyPattern(level) {
-    const pattern = PATTERNS[(level - 1) % PATTERNS.length];
+    const patternIndex = level <= 1 ? 0 : ((level - 2) % (PATTERNS.length - 1)) + 1;
+    const pattern = PATTERNS[patternIndex];
     const color = PATTERN_COLORS[(level - 1) % PATTERN_COLORS.length];
     for (let col = 0; col < COLS; col++) {
       for (let row = 0; row < ROWS; row++) {
@@ -574,8 +580,17 @@ class MainState extends Phaser.Scene {
   }
 
   hit(ball, brick) {
-    this.cameras.main.shake(150, 0.006); // NEW
+    this.cameras.main.shake(150, 0.006);
     this.playTone('hit-brick');
+
+    // Combo increment
+    this.combo += 1;
+    const newMult = Math.min(Math.floor(this.combo / 2) + 1, 5);
+    if (newMult > this.comboMultiplier) {
+      this.showComboText('x' + newMult);
+    }
+    this.comboMultiplier = newMult;
+
     brick.isFalling = true;
     brick.body.setImmovable(false);
     brick.body.setAllowGravity(true);
@@ -595,6 +610,8 @@ class MainState extends Phaser.Scene {
 
   loseLife() {
     this.playTone('life-lost');
+    this.combo = 0;
+    this.comboMultiplier = 1;
     this.lives -= 1;
     this.livesText.text = 'Lives: ' + this.lives;
     this.checkHighScore();
@@ -631,7 +648,7 @@ class MainState extends Phaser.Scene {
     bullet.body.enable = false;
 
     // Score
-    this.score += 100;
+    this.score += 100 * this.comboMultiplier;
     this.scoreText.text = 'Score: ' + this.score;
     this.checkHighScore();
 
@@ -678,6 +695,10 @@ class MainState extends Phaser.Scene {
 
   paddleHit(paddle, ball) {
     this.playTone('hit-paddle');
+    if (this.combo > 0) {
+      this.combo = 0;
+      this.comboMultiplier = 1;
+    }
     const diff = ball.x - paddle.x;
     if (Math.abs(diff) < 5) {
       ball.body.setVelocityX(2 + Math.random() * 8);
@@ -760,6 +781,21 @@ class MainState extends Phaser.Scene {
     }
   }
 
+  showComboText(label) {
+    const W = this.scale.width;
+    const H = this.scale.height;
+    this.comboText.setText(label);
+    this.comboText.setPosition(W / 2, H / 2);
+    this.comboText.setAlpha(1);
+    this.tweens.killTweensOf(this.comboText);
+    this.tweens.add({
+      targets: this.comboText,
+      alpha: 0,
+      delay: 500,
+      duration: 300,
+    });
+  }
+
   restartGame() {
     this.checkHighScore();
     this.scene.restart();
@@ -771,7 +807,7 @@ class MainState extends Phaser.Scene {
     bullet.body.enable = false;
     enemy.setActive(false).setVisible(false);
     enemy.body.enable = false;
-    this.score += enemy.pointValue;
+    this.score += enemy.pointValue * this.comboMultiplier;
     this.scoreText.text = 'Score: ' + this.score;
     this.checkHighScore();
   }
