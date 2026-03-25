@@ -99,10 +99,7 @@ class TitleScene extends Phaser.Scene {
     const H = this.scale.height;
     const highScore = localStorage.getItem('breakout_highscore') || 0;
 
-    // Prevent page scroll on DOWN keypress
-    this.input.keyboard.addCapture(Phaser.Input.Keyboard.KeyCodes.DOWN);
-
-    this.add.text(W / 2, H * 0.35, 'PRESS DOWN TO START', {
+    this.add.text(W / 2, H * 0.35, 'PRESS UP TO START', {
       font: '48px Bungee Shade', fill: '#ffffff'
     }).setOrigin(0.5, 0);
 
@@ -110,7 +107,7 @@ class TitleScene extends Phaser.Scene {
       font: '24px Bungee Shade', fill: '#aaddff'
     }).setOrigin(0.5, 0);
 
-    this.input.keyboard.once('keydown-DOWN', () => this.scene.start('MainState'));
+    this.input.keyboard.once('keydown-UP', () => this.scene.start('MainState'));
     this.time.delayedCall(300, () => {
       this.input.once('pointerdown', () => this.scene.start('MainState'));
     });
@@ -791,6 +788,7 @@ class MainState extends Phaser.Scene {
   }
 
   paddleHit(paddle, ball) {
+    if (ball.startPos) return; // already stuck — don't re-trigger sound/combo every frame
     this.playTone('hit-paddle');
 
     // Reset combo on paddle contact
