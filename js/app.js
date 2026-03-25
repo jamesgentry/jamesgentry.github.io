@@ -1100,8 +1100,9 @@ class MainState extends Phaser.Scene {
         const nidx = this.brickObjects.indexOf(neighbor);
         if (neighbor.isExplosive) {
           if (this.brickCrackGfx[nidx]) this.brickCrackGfx[nidx].clear();
+          neighbor.isFalling = true; // guard BEFORE recursive call to prevent re-entry
           this.triggerExplosion(neighbor); // chain fires immediately
-          this.flashThenDeactivate(neighbor, nidx); // flash then deactivate (sets isFalling + disables body)
+          this.flashThenDeactivate(neighbor, nidx); // flash then deactivate
         } else {
           if (this.brickCrackGfx[nidx]) this.brickCrackGfx[nidx].clear();
           neighbor.isFalling = true;
