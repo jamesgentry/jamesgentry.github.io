@@ -5,7 +5,7 @@ const COLS = 10;
 const ROWS = 6;
 
 const POWERUP_COLORS = {
-  wide:   0x00ffff, // cyan
+  wide:   0xff8800, // orange
   fast:   0xffff00, // yellow
   multi:  0x00ff00, // green
   laser:  0xff4444, // red
