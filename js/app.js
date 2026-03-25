@@ -733,6 +733,10 @@ class MainState extends Phaser.Scene {
         extra.body.reset(ball.x, ball.y);
         extra.startPos = false;
         extra.body.setVelocity(-ball.body.velocity.x, ball.body.velocity.y);
+        // Apply current ball size
+        const r = this.ballSizeActive ? BALL_RADIUS * 2 : BALL_RADIUS;
+        extra.setRadius(r);
+        extra.body.setCircle(r);
       }
     });
   }
@@ -1281,6 +1285,7 @@ class MainState extends Phaser.Scene {
     this.bossBrick.setVisible(true);
     this.bossBrick.body.enable = true;
     this.bossFireTimer = 3500;
+    this.bossHitCooldown = 0;
     this.drawBossHpBar();
   }
 
