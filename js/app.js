@@ -783,15 +783,18 @@ class MainState extends Phaser.Scene {
     // HP system
     brick.hp -= 1;
     if (brick.hp <= 0) {
-      // Clear cracks before brick falls
       const idx = this.brickObjects.indexOf(brick);
-      if (this.brickCrackGfx && this.brickCrackGfx[idx]) {
-        this.brickCrackGfx[idx].clear();
+      if (brick.isExplosive) {
+        this.triggerExplosion(brick);
+        this.flashThenDeactivate(brick, idx);
+      } else {
+        if (this.brickCrackGfx && this.brickCrackGfx[idx]) {
+          this.brickCrackGfx[idx].clear();
+        }
+        brick.isFalling = true;
+        brick.body.setImmovable(false);
+        brick.body.setAllowGravity(true);
       }
-      brick.isFalling = true;
-      brick.body.setImmovable(false);
-      brick.body.setAllowGravity(true);
-      if (brick.isExplosive) this.triggerExplosion(brick);
     } else {
       // Damage visual: darken color + draw cracks
       const c = Phaser.Display.Color.IntegerToColor(brick.fillColor).darken(25);
