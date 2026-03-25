@@ -30,13 +30,13 @@ const SOUNDS = {
 
 // Each entry is 6 rows × 10 cols, '1' = active brick, '0' = gap
 const PATTERNS = [
-  // Level 1 — T-shape (28 bricks, all 1HP)
-  ['1111111111',
-   '1111111111',
-   '0000110000',
-   '0000110000',
-   '0000110000',
-   '0000110000'],
+  // Level 1 — "GO" shape (30 bricks)
+  ['1111001111',
+   '1000001001',
+   '1011001001',
+   '1001001001',
+   '1101001001',
+   '1111001111'],
   // Level 2 — Diamond cluster (~38 bricks)
   ['0011111100',
    '0111111110',
@@ -485,6 +485,7 @@ class MainState extends Phaser.Scene {
           brick.hp = hp;
           brick.maxHp = hp;
           brick.isExplosive = false;
+          brick.forcePowerUp = false;
           // Assign explosive flag from level 2+ using RNG
           if (level >= 2 && rng) {
             // Call rng() for explosive AFTER hp rng() call — reuse same seeded sequence
@@ -500,6 +501,31 @@ class MainState extends Phaser.Scene {
           brick.hp = 0;
           brick.maxHp = 0;
           brick.isExplosive = false;
+          brick.forcePowerUp = false;
+        }
+      }
+    }
+
+    // Level 1 post-pass: armored corners + guaranteed power-ups on bottom row
+    if (level === 1) {
+      const baseColor = PATTERN_COLORS[0]; // 0x88ccff
+      const armorColor = Phaser.Display.Color.IntegerToColor(baseColor).darken(20).color;
+      // G corners: (col,row) = (0,0),(3,0),(0,5),(3,5) → idx = col*6+row
+      // O corners: (6,0),(9,0),(6,5),(9,5)
+      [0, 18, 5, 23, 36, 54, 41, 59].forEach(idx => {
+        const brick = this.brickObjects[idx];
+        if (brick && brick.active) {
+          brick.hp = 2;
+          brick.maxHp = 2;
+          brick.setFillStyle(armorColor);
+        }
+      });
+      // Bottom row (row 5) active bricks get guaranteed power-up
+      for (let col = 0; col < COLS; col++) {
+        const idx = col * ROWS + 5;
+        const brick = this.brickObjects[idx];
+        if (brick && brick.active) {
+          brick.forcePowerUp = true;
         }
       }
     }
@@ -904,8 +930,8 @@ class MainState extends Phaser.Scene {
     }
     if (brick.isExplosive) this.triggerExplosion(brick);
 
-    // Power-up drop — 33% chance
-    if (Math.random() < 0.33) {
+    // Power-up drop — 33% chance, or guaranteed if flagged
+    if (brick.forcePowerUp || Math.random() < 0.33) {
       this.spawnPowerUp(brick.x, brick.y);
     }
   }
