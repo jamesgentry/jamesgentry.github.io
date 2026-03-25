@@ -186,6 +186,8 @@ class MainState extends Phaser.Scene {
     this.bossMaxHp = 0;
     this.bossFireTimer = 0;
     this.bossHitCooldown = 0;
+    this._dropTweens = [];
+    this.introAnimating = false;
 
     // --- Paddle ---
     this.paddle = this.add.rectangle(centerX, H - 20, W / 3, 15, 0xffffff);
@@ -442,6 +444,10 @@ class MainState extends Phaser.Scene {
   }
 
   applyPattern(level) {
+    // Cancel any in-flight drop tweens from previous level
+    this._dropTweens.forEach(t => t.remove());
+    this._dropTweens = [];
+
     const patternIndex = level <= 1 ? 0 : ((level - 2) % (PATTERNS.length - 1)) + 1;
     const pattern = PATTERNS[patternIndex];
     const color = PATTERN_COLORS[(level - 1) % PATTERN_COLORS.length];
@@ -544,8 +550,37 @@ class MainState extends Phaser.Scene {
           if (this.brickCrackGfx && this.brickCrackGfx[idx]) this.brickCrackGfx[idx].clear();
         }
       }));
-      this.activateBoss(level);
     }
+
+    // Drop-from-above intro animation
+    const activeBricks = this.brickObjects.filter(b => b.active);
+    let tweensRemaining = activeBricks.length;
+    this.introAnimating = true;
+
+    activeBricks.forEach(brick => {
+      // Determine column from initX
+      const col = Math.round((brick.initX - this._gridStartX) / (BOX_W + 4));
+      // Move brick off-screen and disable physics until it lands
+      brick.y = -50;
+      brick.body.enable = false;
+
+      const tween = this.tweens.add({
+        targets: brick,
+        y: brick.initY,
+        duration: 400,
+        ease: 'Bounce.Out',
+        delay: col * 40,
+        onComplete: () => {
+          brick.body.enable = true;
+          tweensRemaining--;
+          if (tweensRemaining === 0) {
+            this.introAnimating = false;
+            if (level >= 2) this.activateBoss(level);
+          }
+        }
+      });
+      this._dropTweens.push(tween);
+    });
   }
 
   update(time, delta) {
@@ -567,8 +602,8 @@ class MainState extends Phaser.Scene {
       if (ball.active && ball.startPos) ball.setX(this.paddle.x);
     });
 
-    // Release ball on UP
-    if (Phaser.Input.Keyboard.JustDown(this.cursors.up) && this.balls.some(b => b.active && b.startPos)) {
+    // Release ball on UP — blocked during intro animation
+    if (!this.introAnimating && Phaser.Input.Keyboard.JustDown(this.cursors.up) && this.balls.some(b => b.active && b.startPos)) {
       this.releaseBall();
     }
 
@@ -1471,6 +1506,9 @@ class MainState extends Phaser.Scene {
 
   resetPowerUps() {
     this.nudgeCooldown = 0;
+    this._dropTweens.forEach(t => t.remove());
+    this._dropTweens = [];
+    this.introAnimating = false;
     if (this.timeSlowTimer) { this.timeSlowTimer.remove(); this.timeSlowTimer = null; }
     this.timeSlowActive = false;
     this.physics.world.timeScale = 1.0;
