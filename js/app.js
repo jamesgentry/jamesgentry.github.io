@@ -355,9 +355,9 @@ class MainState extends Phaser.Scene {
     } else {
       this.music = null;
     }
-    this.musicText = this.add.text(W / 2, H - 24, '♪ M: sound off', {
-      font: '13px Bungee', fill: '#557799'
-    }).setOrigin(0.5, 0);
+    this.musicText = this.add.text(W - 10, 36, 'M: OFF', {
+      font: '12px Bungee', fill: '#557799'
+    }).setOrigin(1, 0);
 
     // --- Colliders (registered once, persist across frames) ---
     this.physics.add.collider(this.paddle, this.balls, this.paddleHit, null, this);
@@ -902,9 +902,9 @@ class MainState extends Phaser.Scene {
     if (this.musicOn) {
       // First M press acts as the user gesture that unlocks the AudioContext
       if (this.music && !this.music.isPlaying) this.music.play();
-      this.musicText.setText('♪ M: sound on').setStyle({ fill: '#aaddff' });
+      this.musicText.setText('M: ON ').setStyle({ fill: '#aaddff' });
     } else {
-      this.musicText.setText('♪ M: sound off').setStyle({ fill: '#557799' });
+      this.musicText.setText('M: OFF').setStyle({ fill: '#557799' });
     }
   }
 
