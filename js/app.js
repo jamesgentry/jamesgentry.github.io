@@ -89,6 +89,32 @@ const PATTERN_COLORS = [
   0xffdd00, // Level 6 — gold
 ];
 
+class TitleScene extends Phaser.Scene {
+  constructor() {
+    super({ key: 'TitleScene' });
+  }
+
+  create() {
+    const W = this.scale.width;
+    const H = this.scale.height;
+    const highScore = localStorage.getItem('breakout_highscore') || 0;
+
+    // Prevent page scroll on DOWN keypress
+    this.input.keyboard.addCapture(Phaser.Input.Keyboard.KeyCodes.DOWN);
+
+    this.add.text(W / 2, H * 0.35, 'PRESS DOWN TO START', {
+      font: '48px Bungee Shade', fill: '#ffffff'
+    }).setOrigin(0.5, 0);
+
+    this.add.text(W / 2, H * 0.35 + 60, 'BEST: ' + highScore, {
+      font: '24px Bungee Shade', fill: '#aaddff'
+    }).setOrigin(0.5, 0);
+
+    this.input.keyboard.once('keydown-DOWN', () => this.scene.start('MainState'));
+    this.input.on('pointerdown', () => this.scene.start('MainState'));
+  }
+}
+
 class MainState extends Phaser.Scene {
   constructor() {
     super({ key: 'MainState' });
@@ -248,41 +274,12 @@ class MainState extends Phaser.Scene {
     this.levelText = this.add.text(W / 2, 10, 'Level: 1', {
       font: '20px ' + fontBold, fill: '#ffffff'
     }).setOrigin(0.5, 0);
-    this.startText = this.add.text(centerX, centerY,
-      'Press UP to start\nSPACE to shoot   DOWN to pause   M to toggle sound', {
-      font: '24px Bungee', fill: '#ffffff', align: 'center'
-    }).setOrigin(0.5, 0.5);
     this.pauseText = this.add.text(centerX, centerY, 'Paused', {
       font: '30px ' + fontBold, fill: '#ffffff', align: 'center'
     }).setOrigin(0.5, 0.5).setVisible(false);
     this.comboText = this.add.text(W / 2, H / 2, '', {
       font: '56px Bungee Shade', fill: '#ffff00'
     }).setOrigin(0.5, 0.5).setAlpha(0).setDepth(20);
-
-    // --- Power-up legend (shown on start screen, hidden on launch) ---
-    const legendY = centerY + 100;
-    const puDefs = [
-      { label: 'Wide Paddle', color: '#00ffff' },
-      { label: 'Speed Boost', color: '#ffff00' },
-      { label: 'Multi-Ball',  color: '#00ff00' },
-      { label: 'Laser Burst', color: '#ff4444' },
-      { label: 'Extra Life',  color: '#ff88cc' },
-    ];
-    this.legend = [];
-    this.legend.push(this.add.text(centerX, legendY - 24, '— POWER-UPS —', {
-      font: '14px Bungee', fill: '#aaaaaa', align: 'center'
-    }).setOrigin(0.5, 0));
-    const itemW = 120;
-    const totalW = puDefs.length * itemW;
-    puDefs.forEach((pu, idx) => {
-      const x = centerX - totalW / 2 + idx * itemW + itemW / 2;
-      this.legend.push(this.add.text(x, legendY, '■', {
-        font: '18px Bungee', fill: pu.color
-      }).setOrigin(0.5, 0));
-      this.legend.push(this.add.text(x, legendY + 22, pu.label, {
-        font: '11px Bungee', fill: '#cccccc', align: 'center'
-      }).setOrigin(0.5, 0));
-    });
 
     // --- Keyboard ---
     this.cursors = this.input.keyboard.createCursorKeys();
@@ -553,8 +550,6 @@ class MainState extends Phaser.Scene {
         i++;
       }
     });
-    this.startText.setVisible(false);
-    this.legend.forEach(o => o.setVisible(false));
   }
 
   fireBullet() {
@@ -703,7 +698,6 @@ class MainState extends Phaser.Scene {
     this.comboMultiplier = 1;
     this.lives -= 1;
     this.livesText.text = 'Lives: ' + this.lives;
-    this.checkHighScore();
     this.resetPowerUps();
     this.enemyBullets.forEach(b => {
       if (b.active) { b.setActive(false).setVisible(false); b.body.enable = false; }
@@ -743,7 +737,6 @@ class MainState extends Phaser.Scene {
     // Score
     this.score += 100 * this.comboMultiplier;
     this.scoreText.text = 'Score: ' + this.score;
-    this.checkHighScore();
 
     // Camera shake
     this.cameras.main.shake(300, 0.012);
@@ -936,8 +929,14 @@ class MainState extends Phaser.Scene {
   }
 
   restartGame() {
+    // Capture high score BEFORE checkHighScore updates it — GameOverScene uses this to detect new best
+    const prevBest = parseInt(localStorage.getItem('breakout_highscore') || 0);
     this.checkHighScore();
-    this.scene.restart();
+    this.scene.start('GameOverScene', {
+      score: this.score,
+      level: this.level,
+      highScore: prevBest
+    });
   }
 
   shootEnemy(bullet, enemy) {
@@ -948,7 +947,6 @@ class MainState extends Phaser.Scene {
     enemy.body.enable = false;
     this.score += enemy.pointValue * this.comboMultiplier;
     this.scoreText.text = 'Score: ' + this.score;
-    this.checkHighScore();
   }
 
   enemyBulletHit(enemyBullet, paddle) {
@@ -1140,6 +1138,43 @@ class MainState extends Phaser.Scene {
   }
 }
 
+class GameOverScene extends Phaser.Scene {
+  constructor() {
+    super({ key: 'GameOverScene' });
+  }
+
+  create() {
+    const W = this.scale.width;
+    const H = this.scale.height;
+    const { score, level, highScore } = this.scene.settings.data;
+    const isNewBest = score > highScore;
+
+    // Prevent page scroll on DOWN keypress
+    this.input.keyboard.addCapture(Phaser.Input.Keyboard.KeyCodes.DOWN);
+
+    this.add.text(W / 2, H * 0.3, 'GAME OVER', {
+      font: '64px Bungee Shade', fill: '#ffffff'
+    }).setOrigin(0.5, 0);
+
+    this.add.text(W / 2, H * 0.3 + 60, 'Score: ' + score + '  ·  Level ' + level + ' reached', {
+      font: '24px Bungee Shade', fill: '#ffffff'
+    }).setOrigin(0.5, 0);
+
+    if (isNewBest) {
+      this.add.text(W / 2, H * 0.3 + 100, 'NEW BEST!', {
+        font: '32px Bungee Shade', fill: '#ffdd00'
+      }).setOrigin(0.5, 0);
+    }
+
+    this.add.text(W / 2, H * 0.3 + 150, 'PRESS DOWN TO PLAY AGAIN', {
+      font: '20px Bungee Shade', fill: '#aaddff'
+    }).setOrigin(0.5, 0);
+
+    this.input.keyboard.once('keydown-DOWN', () => this.scene.start('TitleScene'));
+    this.input.on('pointerdown', () => this.scene.start('TitleScene'));
+  }
+}
+
 const config = {
   type: Phaser.AUTO,
   width: window.innerWidth,
@@ -1152,7 +1187,7 @@ const config = {
       debug: false
     }
   },
-  scene: MainState
+  scene: [TitleScene, MainState, GameOverScene]
 };
 
 const game = new Phaser.Game(config);
