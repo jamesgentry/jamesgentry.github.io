@@ -228,6 +228,9 @@ class MainState extends Phaser.Scene {
       this.brickCrackGfx.push(gfx);
     }
 
+    // Ghost ball trail graphics
+    this.trailGfx = this.add.graphics().setDepth(1);
+
     // Boss brick — single entity, shown/hidden per level
     // Position is set after _gridStartX is known (initBricks was called above)
     // Boss occupies cols 3,4,5 × rows 2,3 (0-indexed), center = col 4, midpoint of rows 2-3
@@ -597,6 +600,25 @@ class MainState extends Phaser.Scene {
       pw, ph, 8
     );
 
+    // Ghost ball trail
+    this.trailGfx.clear();
+    this.balls.forEach(ball => {
+      if (!ball.active) return;
+      // Update position history
+      ball.trail = ball.trail || [];
+      ball.trail.push({ x: ball.x, y: ball.y });
+      if (ball.trail.length > 4) ball.trail.shift();
+      // Draw trail if fast enough
+      const speed = Math.hypot(ball.body.velocity.x, ball.body.velocity.y);
+      if (speed > 420) {
+        const alphas = [0.15, 0.25, 0.40, 0.55];
+        ball.trail.forEach((pos, i) => {
+          this.trailGfx.fillStyle(ball.fillColor, alphas[i]);
+          this.trailGfx.fillCircle(pos.x, pos.y, ball.radius - 1);
+        });
+      }
+    });
+
     // Keep startPos balls aligned with paddle
     this.balls.forEach(ball => {
       if (ball.active && ball.startPos) ball.setX(this.paddle.x);
@@ -703,6 +725,7 @@ class MainState extends Phaser.Scene {
       if (ball.active && ball.y > this.paddle.y + 40) {
         ball.setActive(false).setVisible(false);
         ball.body.enable = false;
+        ball.trail = [];
       }
     });
 
@@ -820,6 +843,7 @@ class MainState extends Phaser.Scene {
         extra.body.enable = true;
         extra.body.reset(ball.x, ball.y);
         extra.startPos = false;
+        extra.trail = [];
         extra.body.setVelocity(-ball.body.velocity.x, ball.body.velocity.y);
         // Apply current ball size
         const r = this.ballSizeActive ? BALL_RADIUS * 2 : BALL_RADIUS;
@@ -1329,6 +1353,7 @@ class MainState extends Phaser.Scene {
     ball.body.enable = true;
     ball.body.reset(x, y);
     ball.startPos = startPos;
+    ball.trail = [];
     // Apply current ball size (respects bigball power-up)
     const r = this.ballSizeActive ? BALL_RADIUS * 2 : BALL_RADIUS;
     ball.setRadius(r);
@@ -1508,6 +1533,8 @@ class MainState extends Phaser.Scene {
     this.nudgeCooldown = 0;
     this._dropTweens.forEach(t => t.remove());
     this._dropTweens = [];
+    this.trailGfx.clear();
+    this.balls.forEach(ball => { ball.trail = []; });
     this.introAnimating = false;
     if (this.timeSlowTimer) { this.timeSlowTimer.remove(); this.timeSlowTimer = null; }
     this.timeSlowActive = false;
