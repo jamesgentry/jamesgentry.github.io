@@ -4,6 +4,9 @@ const BALL_RADIUS = 9;
 const COLS = 10;
 const ROWS = 6;
 
+const BOSS_W = BOX_W * 3 + 4 * 2;  // 46*3 + 8 = 146
+const BOSS_H = BOX_H * 2 + 10;     // 26*2 + 10 = 62
+
 const POWERUP_COLORS = {
   wide:   0xff8800, // orange
   fast:   0xffff00, // yellow
@@ -171,6 +174,10 @@ class MainState extends Phaser.Scene {
     this.ballSizeTimer = null;
     this.timeSlowActive = false;
     this.timeSlowTimer = null;
+    this.bossActive = false;
+    this.bossHp = 0;
+    this.bossMaxHp = 0;
+    this.bossFireTimer = 0;
 
     // --- Paddle ---
     this.paddle = this.add.rectangle(centerX, H - 20, W / 3, 15, 0xffffff);
@@ -210,6 +217,21 @@ class MainState extends Phaser.Scene {
       gfx.setDepth(1); // above bricks (depth 0), below paddle (depth 10)
       this.brickCrackGfx.push(gfx);
     }
+
+    // Boss brick — single entity, shown/hidden per level
+    // Position is set after _gridStartX is known (initBricks was called above)
+    // Boss occupies cols 3,4,5 × rows 2,3 (0-indexed), center = col 4, midpoint of rows 2-3
+    this.bossX = this._gridStartX + 4 * (BOX_W + 4);
+    this.bossY = 130 + (BOX_H + 10) * 2.5; // midpoint of rows 2 and 3: 130 + 90 = 220
+    this.bossBrick = this.add.rectangle(this.bossX, this.bossY, BOSS_W, BOSS_H, 0xffcc00);
+    this.physics.add.existing(this.bossBrick);
+    this.bossBrick.body.setImmovable(true);
+    this.bossBrick.body.setAllowGravity(false);
+    this.bossBrick.setVisible(false);
+    this.bossBrick.body.enable = false;
+    this.bossBrickGfx = this.add.graphics();
+    this.bossBrickGfx.setDepth(2);
+    this.bossBrickGfx.setVisible(false);
 
     this.applyPattern(1);
     this.setBackground(1);
@@ -354,6 +376,8 @@ class MainState extends Phaser.Scene {
     // Shield colliders — only fire when shieldRect.body.enable = true
     this.physics.add.overlap(this.balls, this.shieldRect, this.shieldHitByBall, null, this);
     this.physics.add.overlap(this.enemyBullets, this.shieldRect, this.shieldHitByBullet, null, this);
+    this.physics.add.overlap(this.balls, this.bossBrick, this.hitBoss, null, this);
+    this.physics.add.overlap(this.bulletObjects, this.bossBrick, this.shootBoss, null, this);
 
     // --- Camera flash on start ---
     this.cameras.main.flash(2000, 255, 255, 255);
@@ -468,6 +492,21 @@ class MainState extends Phaser.Scene {
         }
       }
     }
+
+    // Boss: from level 2+, clear the 6 bricks in boss footprint and activate boss
+    if (level >= 2) {
+      [3, 4, 5].forEach(c => [2, 3].forEach(r => {
+        const idx = c * ROWS + r;
+        const brick = this.brickObjects[idx];
+        if (brick) {
+          brick.setActive(false).setVisible(false);
+          brick.body.enable = false;
+          brick.hp = 0;
+          if (this.brickCrackGfx && this.brickCrackGfx[idx]) this.brickCrackGfx[idx].clear();
+        }
+      }));
+      this.activateBoss(level);
+    }
   }
 
   update(time, delta) {
@@ -556,9 +595,17 @@ class MainState extends Phaser.Scene {
       }
     });
 
+    if (this.bossActive) {
+      this.bossFireTimer -= delta;
+      if (this.bossFireTimer <= 0) {
+        this.fireBossBullet();
+        this.bossFireTimer = Phaser.Math.Between(3000, 4000);
+      }
+    }
+
     // Level clear — reset all bricks (check BEFORE life-loss so they can't both fire)
     const activeBricks = this.brickObjects.filter(b => b.active).length;
-    if (activeBricks === 0) {
+    if (activeBricks === 0 && !this.bossActive) {
       this.resetBricks();
       return;
     }
@@ -1236,6 +1283,88 @@ class MainState extends Phaser.Scene {
     this.physics.world.timeScale = 1.0;
   }
 
+  activateBoss(level) {
+    this.bossMaxHp = (level - 2) + 5; // level 2 = 5HP, level 3 = 6HP, etc.
+    this.bossHp = this.bossMaxHp;
+    this.bossActive = true;
+    this.bossBrick.setFillStyle(0xffcc00);
+    this.bossBrick.setVisible(true);
+    this.bossBrick.body.enable = true;
+    this.bossFireTimer = 3500;
+    this.drawBossHpBar();
+  }
+
+  deactivateBoss(silent = false) {
+    this.bossActive = false;
+    this.bossBrick.setVisible(false);
+    this.bossBrick.body.enable = false;
+    this.bossBrickGfx.clear();
+    this.bossBrickGfx.setVisible(false);
+    if (!silent) {
+      this.score += 500 * this.comboMultiplier;
+      this.scoreText.text = 'Score: ' + this.score;
+    }
+  }
+
+  drawBossHpBar() {
+    this.bossBrickGfx.setVisible(true);
+    this.bossBrickGfx.clear();
+    const barY = this.bossY + BOSS_H / 2 + 6;
+    // Background
+    this.bossBrickGfx.fillStyle(0x333333, 0.8);
+    this.bossBrickGfx.fillRect(this.bossX - BOSS_W / 2, barY, BOSS_W, 4);
+    // Fill
+    this.bossBrickGfx.fillStyle(0x00ff88, 1.0);
+    this.bossBrickGfx.fillRect(
+      this.bossX - BOSS_W / 2, barY,
+      BOSS_W * (this.bossHp / this.bossMaxHp), 4
+    );
+  }
+
+  hitBoss(ball, bossBrick) {
+    if (!this.bossActive) return;
+    this.cameras.main.shake(150, 0.006);
+    this.playTone('hit-brick');
+    this.bossHp -= 1;
+    if (this.bossHp <= 0) {
+      this.deactivateBoss();
+    } else {
+      const pct = 1 - this.bossHp / this.bossMaxHp;
+      const c = Phaser.Display.Color.IntegerToColor(0xffcc00).darken(Math.floor(25 * pct));
+      this.bossBrick.setFillStyle(c.color);
+      this.drawBossHpBar();
+      this.fireBossBullet();
+    }
+  }
+
+  shootBoss(bullet, bossBrick) {
+    if (!this.bossActive) return;
+    bullet.setActive(false).setVisible(false);
+    bullet.body.enable = false;
+    this.bossHp -= 1;
+    this.cameras.main.shake(200, 0.01);
+    this.playTone('explode');
+    if (this.bossHp <= 0) {
+      this.deactivateBoss();
+    } else {
+      const pct = 1 - this.bossHp / this.bossMaxHp;
+      const c = Phaser.Display.Color.IntegerToColor(0xffcc00).darken(Math.floor(25 * pct));
+      this.bossBrick.setFillStyle(c.color);
+      this.drawBossHpBar();
+      this.fireBossBullet();
+    }
+  }
+
+  fireBossBullet() {
+    const bullet = this.enemyBullets.find(b => !b.active);
+    if (!bullet) return;
+    bullet.setPosition(this.bossX, this.bossY + BOSS_H / 2);
+    bullet.setActive(true).setVisible(true);
+    bullet.body.enable = true;
+    bullet.body.reset(this.bossX, this.bossY + BOSS_H / 2);
+    bullet.body.setVelocity(Phaser.Math.Between(-60, 60), 350);
+  }
+
   shieldHitByBall(ball, shieldRect) {
     if (!this.shieldActive) return;
     if (ball.body.velocity.y > 0) {
@@ -1280,6 +1409,7 @@ class MainState extends Phaser.Scene {
       b.setActive(false).setVisible(false);
       b.body.enable = false;
     });
+    if (this.bossActive) this.deactivateBoss(true); // silent — no score on life loss
   }
 }
 
