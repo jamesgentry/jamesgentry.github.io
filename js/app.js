@@ -5,11 +5,13 @@ const COLS = 10;
 const ROWS = 6;
 
 const POWERUP_COLORS = {
-  wide:  0x00ffff, // cyan
-  fast:  0xffff00, // yellow
-  multi: 0x00ff00, // green
-  laser: 0xff4444, // red
-  life:  0xff88cc  // pink
+  wide:   0x00ffff, // cyan
+  fast:   0xffff00, // yellow
+  multi:  0x00ff00, // green
+  laser:  0xff4444, // red
+  life:   0xff88cc, // pink
+  magnet: 0x9933ff, // purple
+  shield: 0x44ffff, // light cyan
 };
 
 const SOUNDS = {
@@ -116,6 +118,7 @@ class MainState extends Phaser.Scene {
     this.paddleSpeed = 500;
     this.combo = 0;
     this.comboMultiplier = 1;
+    this.magnetActive = false;
 
     // --- Paddle ---
     this.paddle = this.add.rectangle(centerX, H - 20, W / 3, 15, 0xffffff);
@@ -434,7 +437,7 @@ class MainState extends Phaser.Scene {
     });
 
     // Release ball on UP
-    if (this.cursors.up.isDown && this.balls.some(b => b.active && b.startPos)) {
+    if (Phaser.Input.Keyboard.JustDown(this.cursors.up) && this.balls.some(b => b.active && b.startPos)) {
       this.releaseBall();
     }
 
@@ -522,10 +525,14 @@ class MainState extends Phaser.Scene {
   }
 
   releaseBall() {
+    const xOffsets = [-75, 75, -150]; // spread angles for up to 3 stuck balls
+    let i = 0;
     this.balls.forEach(ball => {
       if (ball.active && ball.startPos) {
         ball.startPos = false;
-        ball.body.setVelocity(-75, -this.ballSpeed);
+        const vx = xOffsets[i] !== undefined ? xOffsets[i] : -75;
+        ball.body.setVelocity(vx, -this.ballSpeed);
+        i++;
       }
     });
     this.startText.setVisible(false);
@@ -548,7 +555,7 @@ class MainState extends Phaser.Scene {
   }
 
   spawnPowerUp(x, y) {
-    const types = ['wide', 'fast', 'multi', 'laser', 'life'];
+    const types = ['wide', 'fast', 'multi', 'laser', 'life', 'magnet', 'shield'];
     const pu = this.powerUps.find(p => !p.active);
     if (!pu) return;
     pu.type = Phaser.Utils.Array.GetRandom(types);
@@ -584,6 +591,9 @@ class MainState extends Phaser.Scene {
       case 'life':
         this.lives = Math.min(this.lives + 1, 5);
         this.livesText.text = 'Lives: ' + this.lives;
+        break;
+      case 'magnet':
+        this.magnetActive = true;
         break;
     }
 
@@ -758,10 +768,21 @@ class MainState extends Phaser.Scene {
 
   paddleHit(paddle, ball) {
     this.playTone('hit-paddle');
+
+    // Reset combo on paddle contact
     if (this.combo > 0) {
       this.combo = 0;
       this.comboMultiplier = 1;
     }
+
+    // Magnet: stick ball to paddle instead of bouncing
+    if (this.magnetActive) {
+      ball.body.setVelocity(0, 0);
+      ball.startPos = true;
+      return;
+    }
+
+    // Angle calc — sets X only; physics engine handles Y reversal via setBounce(1)
     const diff = ball.x - paddle.x;
     if (Math.abs(diff) < 5) {
       ball.body.setVelocityX(2 + Math.random() * 8);
@@ -1039,6 +1060,7 @@ class MainState extends Phaser.Scene {
   }
 
   resetPowerUps() {
+    this.magnetActive = false;
     this.powerUps.forEach(pu => {
       if (pu.active) {
         pu.setActive(false).setVisible(false);
