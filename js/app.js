@@ -13,6 +13,7 @@ const POWERUP_COLORS = {
   magnet: 0x9933ff, // purple
   shield: 0x44ffff, // light cyan
   bigball: 0x00aaff, // sky blue
+  timeslow: 0xaaaaff, // pale lavender
 };
 
 const SOUNDS = {
@@ -114,6 +115,7 @@ class TitleScene extends Phaser.Scene {
       ['MULTI',    0x00ff00], ['LASER',  0xff4444],
       ['LIFE',     0xff88cc], ['MAGNET', 0x9933ff],
       ['SHIELD',   0x44ffff], ['BIG BALL', 0x00aaff],
+      ['TIME SLOW', 0xaaaaff],
     ];
     const legendStartY = H * 0.35 + 120;
     const colW = 130;
@@ -167,6 +169,8 @@ class MainState extends Phaser.Scene {
     this.shieldActive = false;
     this.ballSizeActive = false;
     this.ballSizeTimer = null;
+    this.timeSlowActive = false;
+    this.timeSlowTimer = null;
 
     // --- Paddle ---
     this.paddle = this.add.rectangle(centerX, H - 20, W / 3, 15, 0xffffff);
@@ -650,6 +654,9 @@ class MainState extends Phaser.Scene {
         break;
       case 'bigball':
         this.activateBigBall();
+        break;
+      case 'timeslow':
+        this.activateTimeSlow();
         break;
     }
 
@@ -1216,6 +1223,19 @@ class MainState extends Phaser.Scene {
     });
   }
 
+  activateTimeSlow() {
+    if (this.timeSlowTimer) this.timeSlowTimer.remove();
+    this.timeSlowActive = true;
+    this.physics.world.timeScale = 0.35;
+    this.timeSlowTimer = this.time.delayedCall(5000, () => this.deactivateTimeSlow());
+  }
+
+  deactivateTimeSlow() {
+    this.timeSlowActive = false;
+    this.timeSlowTimer = null;
+    this.physics.world.timeScale = 1.0;
+  }
+
   shieldHitByBall(ball, shieldRect) {
     if (!this.shieldActive) return;
     if (ball.body.velocity.y > 0) {
@@ -1234,6 +1254,9 @@ class MainState extends Phaser.Scene {
   }
 
   resetPowerUps() {
+    if (this.timeSlowTimer) { this.timeSlowTimer.remove(); this.timeSlowTimer = null; }
+    this.timeSlowActive = false;
+    this.physics.world.timeScale = 1.0;
     if (this.ballSizeTimer) { this.ballSizeTimer.remove(); this.ballSizeTimer = null; }
     this.ballSizeActive = false;
     this.balls.forEach(ball => {
