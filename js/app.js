@@ -130,7 +130,7 @@ class TitleScene extends Phaser.Scene {
       this.add.text(x + 16, y, label, { font: '13px Arial', fill: '#ffffff' });
     });
 
-    this.add.text(W / 2, legendStartY + Math.ceil(legendDefs.length / 2) * 28 + 16, 'M — toggle music', {
+    this.add.text(W / 2, legendStartY + Math.ceil(legendDefs.length / 2) * 28 + 16, 'M — toggle sound', {
       font: '13px Arial', fill: '#ffffff'
     }).setOrigin(0.5, 0);
 
