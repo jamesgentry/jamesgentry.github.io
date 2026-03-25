@@ -709,7 +709,8 @@ class MainState extends Phaser.Scene {
       this.bossFireTimer -= delta;
       if (this.bossFireTimer <= 0) {
         this.fireBossBullet();
-        this.bossFireTimer = Phaser.Math.Between(3000, 4000);
+        const hpRatio = this.bossHp / this.bossMaxHp;
+        this.bossFireTimer = 1000 + Math.round(hpRatio * 2500);
       }
     }
 
@@ -1472,8 +1473,10 @@ class MainState extends Phaser.Scene {
       this.deactivateBoss();
     } else {
       const pct = 1 - this.bossHp / this.bossMaxHp;
-      const c = Phaser.Display.Color.IntegerToColor(0xffcc00).darken(Math.floor(25 * pct));
-      this.bossBrick.setFillStyle(c.color);
+      const r = 0xff;
+      const g = Math.round(0xcc * (1 - pct) + 0x44 * pct);
+      const bVal = 0x00;
+      this.bossBrick.setFillStyle((r << 16) | (g << 8) | bVal);
       this.drawBossHpBar();
       this.fireBossBullet();
     }
@@ -1495,21 +1498,29 @@ class MainState extends Phaser.Scene {
       this.deactivateBoss();
     } else {
       const pct = 1 - this.bossHp / this.bossMaxHp;
-      const c = Phaser.Display.Color.IntegerToColor(0xffcc00).darken(Math.floor(25 * pct));
-      this.bossBrick.setFillStyle(c.color);
+      const r = 0xff;
+      const g = Math.round(0xcc * (1 - pct) + 0x44 * pct);
+      const bVal = 0x00;
+      this.bossBrick.setFillStyle((r << 16) | (g << 8) | bVal);
       this.drawBossHpBar();
       this.fireBossBullet();
     }
   }
 
   fireBossBullet() {
-    const bullet = this.enemyBullets.find(b => !b.active);
-    if (!bullet) return;
-    bullet.setPosition(this.bossX, this.bossY + BOSS_H / 2);
-    bullet.setActive(true).setVisible(true);
-    bullet.body.enable = true;
-    bullet.body.reset(this.bossX, this.bossY + BOSS_H / 2);
-    bullet.body.setVelocity(Phaser.Math.Between(-60, 60), 350);
+    const isEnraged = this.bossMaxHp > 0 && (this.bossHp / this.bossMaxHp) < 0.25;
+    const angles = isEnraged ? [0, -25, 25] : [0];
+    angles.forEach(deg => {
+      const shot = this.enemyBullets.find(b => !b.active);
+      if (!shot) return;
+      shot.setPosition(this.bossX, this.bossY + BOSS_H / 2);
+      shot.setActive(true).setVisible(true);
+      shot.body.enable = true;
+      shot.body.reset(this.bossX, this.bossY + BOSS_H / 2);
+      const rad = Phaser.Math.DegToRad(deg);
+      const speed = 350;
+      shot.body.setVelocity(speed * Math.sin(rad), speed * Math.cos(rad));
+    });
   }
 
   shieldHitByBall(ball, shieldRect) {
