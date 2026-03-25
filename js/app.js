@@ -136,6 +136,7 @@ class MainState extends Phaser.Scene {
     this.score = 0;
     this.highScore = parseInt(localStorage.getItem('breakout_highscore') || '0');
     this.lives = 3;
+    this._losingLife = false;
     this.lastFired = 0;
     this.fireRate = 200;
     this.bulletSpeed = 900;
@@ -652,6 +653,7 @@ class MainState extends Phaser.Scene {
   }
 
   hit(ball, brick) {
+    if (brick.isFalling) return; // ball can still bounce off mid-air bricks but they're already counted
     this.cameras.main.shake(150, 0.006);
     this.playTone('hit-brick');
 
@@ -695,6 +697,8 @@ class MainState extends Phaser.Scene {
   }
 
   loseLife() {
+    if (this._losingLife) return;
+    this._losingLife = true;
     this.playTone('life-lost');
     this.combo = 0;
     this.comboMultiplier = 1;
@@ -712,6 +716,7 @@ class MainState extends Phaser.Scene {
       this.restartGame();
       return;
     }
+    this._losingLife = false;
     this.cameras.main.flash(500, 255, 0, 0, true);
     this.activateBall(this.balls[0], this.paddle.x, this.paddle.y - 40, true);
   }
@@ -827,7 +832,7 @@ class MainState extends Phaser.Scene {
     const ctx = this.sound.context;
     if (!ctx) return;
     if (ctx.state === 'suspended') {
-      ctx.resume();
+      ctx.resume().then(() => this.playTone(name));
       return;
     }
 
