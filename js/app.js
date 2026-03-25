@@ -359,6 +359,8 @@ class MainState extends Phaser.Scene {
 
   initBricks(centerX) {
     const startX = centerX - (COLS * (BOX_W + 4)) / 2 + BOX_W / 2;
+    this._gridStartX = startX;
+    this._gridStartY = 130;
     for (let col = 0; col < COLS; col++) {
       for (let row = 0; row < ROWS; row++) {
         const x = startX + col * (BOX_W + 4);
@@ -443,11 +445,22 @@ class MainState extends Phaser.Scene {
           }
           brick.hp = hp;
           brick.maxHp = hp;
+          brick.isExplosive = false;
+          // Assign explosive flag from level 2+ using RNG
+          if (level >= 2 && rng) {
+            // Call rng() for explosive AFTER hp rng() call — reuse same seeded sequence
+            brick.isExplosive = rng() < 0.15;
+          }
+          if (brick.isExplosive) {
+            brick.setFillStyle(0xff6600); // orange-red, overrides pattern color
+            this.drawExplosiveMarker(brick);
+          }
         } else {
           brick.setActive(false).setVisible(false);
           brick.body.enable = false;
           brick.hp = 0;
           brick.maxHp = 0;
+          brick.isExplosive = false;
         }
       }
     }
@@ -697,6 +710,7 @@ class MainState extends Phaser.Scene {
       brick.isFalling = true;
       brick.body.setImmovable(false);
       brick.body.setAllowGravity(true);
+      if (brick.isExplosive) this.triggerExplosion(brick);
     } else {
       // Damage visual: darken color + draw cracks
       const c = Phaser.Display.Color.IntegerToColor(brick.fillColor).darken(25);
@@ -804,6 +818,7 @@ class MainState extends Phaser.Scene {
     if (this.brickCrackGfx && this.brickCrackGfx[idx]) {
       this.brickCrackGfx[idx].clear();
     }
+    if (brick.isExplosive) this.triggerExplosion(brick);
 
     // Power-up drop — 33% chance
     if (Math.random() < 0.33) {
@@ -955,6 +970,50 @@ class MainState extends Phaser.Scene {
       gfx.lineTo(brick.x - BOX_W / 2 + 4, brick.y + BOX_H / 2 - 4);
       gfx.strokePath();
     }
+  }
+
+  drawExplosiveMarker(brick) {
+    const idx = this.brickObjects.indexOf(brick);
+    if (idx < 0) return;
+    const gfx = this.brickCrackGfx[idx];
+    if (!gfx) return;
+    gfx.clear();
+    gfx.lineStyle(2, 0x000000, 0.7);
+    gfx.beginPath();
+    gfx.moveTo(brick.x - BOX_W / 2 + 6, brick.y - BOX_H / 2 + 4);
+    gfx.lineTo(brick.x + BOX_W / 2 - 6, brick.y + BOX_H / 2 - 4);
+    gfx.strokePath();
+    gfx.beginPath();
+    gfx.moveTo(brick.x + BOX_W / 2 - 6, brick.y - BOX_H / 2 + 4);
+    gfx.lineTo(brick.x - BOX_W / 2 + 6, brick.y + BOX_H / 2 - 4);
+    gfx.strokePath();
+  }
+
+  triggerExplosion(brick) {
+    const col = Math.round((brick.initX - this._gridStartX) / (BOX_W + 4));
+    const row = Math.round((brick.initY - this._gridStartY) / (BOX_H + 10));
+    const neighbors = [
+      [col - 1, row], [col + 1, row], [col, row - 1], [col, row + 1]
+    ];
+    neighbors.forEach(([nc, nr]) => {
+      if (nc < 0 || nc >= COLS || nr < 0 || nr >= ROWS) return;
+      const idx = nc * ROWS + nr;
+      const neighbor = this.brickObjects[idx];
+      if (!neighbor || !neighbor.active || neighbor.isFalling) return;
+      neighbor.hp -= 1;
+      if (neighbor.hp <= 0) {
+        const nidx = this.brickObjects.indexOf(neighbor);
+        if (this.brickCrackGfx[nidx]) this.brickCrackGfx[nidx].clear();
+        neighbor.isFalling = true; // set BEFORE recursive call — prevents re-entry on same brick
+        neighbor.body.setImmovable(false);
+        neighbor.body.setAllowGravity(true);
+        if (neighbor.isExplosive) this.triggerExplosion(neighbor); // chain
+      } else {
+        const c = Phaser.Display.Color.IntegerToColor(neighbor.fillColor).darken(25);
+        neighbor.setFillStyle(c.color);
+        this.drawBrickCracks(neighbor);
+      }
+    });
   }
 
   restartGame() {
