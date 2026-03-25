@@ -131,7 +131,7 @@ class TitleScene extends Phaser.Scene {
     });
 
     this.add.text(W / 2, legendStartY + Math.ceil(legendDefs.length / 2) * 28 + 16, 'M — toggle music', {
-      font: '13px Arial', fill: '#aaaacc'
+      font: '13px Arial', fill: '#ffffff'
     }).setOrigin(0.5, 0);
 
     this.input.keyboard.once('keydown-UP', () => this.scene.start('MainState'));
