@@ -13,7 +13,6 @@ const POWERUP_COLORS = {
   multi:  0x00ff00, // green
   laser:  0xff4444, // red
   life:   0xff88cc, // pink
-  magnet: 0x9933ff, // purple
   shield: 0x44ffff, // light cyan
   bigball: 0x00aaff, // sky blue
   timeslow: 0xaaaaff, // pale lavender
@@ -116,7 +115,7 @@ class TitleScene extends Phaser.Scene {
     const legendDefs = [
       ['WIDE',     0xff8800], ['FAST',   0xffff00],
       ['MULTI',    0x00ff00], ['LASER',  0xff4444],
-      ['LIFE',     0xff88cc], ['MAGNET', 0x9933ff],
+      ['LIFE',     0xff88cc],
       ['SHIELD',   0x44ffff], ['BIG BALL', 0x00aaff],
       ['TIME SLOW', 0xaaaaff],
     ];
@@ -168,7 +167,6 @@ class MainState extends Phaser.Scene {
     this.paddleSpeed = 500;
     this.combo = 0;
     this.comboMultiplier = 1;
-    this.magnetActive = false;
     this.shieldActive = false;
     this.ballSizeActive = false;
     this.ballSizeTimer = null;
@@ -655,7 +653,7 @@ class MainState extends Phaser.Scene {
   }
 
   spawnPowerUp(x, y) {
-    const types = ['wide', 'fast', 'multi', 'laser', 'life', 'magnet', 'shield', 'bigball', 'timeslow'];
+    const types = ['wide', 'fast', 'multi', 'laser', 'life', 'shield', 'bigball', 'timeslow'];
     const pu = this.powerUps.find(p => !p.active);
     if (!pu) return;
     pu.type = Phaser.Utils.Array.GetRandom(types);
@@ -691,9 +689,6 @@ class MainState extends Phaser.Scene {
       case 'life':
         this.lives = Math.min(this.lives + 1, 5);
         this.livesText.text = 'Lives: ' + this.lives;
-        break;
-      case 'magnet':
-        this.magnetActive = true;
         break;
       case 'shield':
         this.shieldActive = true;
@@ -890,13 +885,6 @@ class MainState extends Phaser.Scene {
     if (this.combo > 0) {
       this.combo = 0;
       this.comboMultiplier = 1;
-    }
-
-    // Magnet: stick ball to paddle instead of bouncing
-    if (this.magnetActive) {
-      ball.body.setVelocity(0, 0);
-      ball.startPos = true;
-      return;
     }
 
     // Angle calc — sets X only; physics engine handles Y reversal via setBounce(1)
@@ -1402,7 +1390,6 @@ class MainState extends Phaser.Scene {
       ball.setRadius(BALL_RADIUS);
       ball.body.setCircle(BALL_RADIUS);
     });
-    this.magnetActive = false;
     if (this.shieldActive) this.deactivateShield();
     this.powerUps.forEach(pu => {
       if (pu.active) {
