@@ -178,6 +178,7 @@ class MainState extends Phaser.Scene {
     this.bossHp = 0;
     this.bossMaxHp = 0;
     this.bossFireTimer = 0;
+    this.bossHitCooldown = 0;
 
     // --- Paddle ---
     this.paddle = this.add.rectangle(centerX, H - 20, W / 3, 15, 0xffffff);
@@ -502,6 +503,7 @@ class MainState extends Phaser.Scene {
           brick.setActive(false).setVisible(false);
           brick.body.enable = false;
           brick.hp = 0;
+          brick.isExplosive = false;
           if (this.brickCrackGfx && this.brickCrackGfx[idx]) this.brickCrackGfx[idx].clear();
         }
       }));
@@ -1323,6 +1325,9 @@ class MainState extends Phaser.Scene {
 
   hitBoss(ball, bossBrick) {
     if (!this.bossActive) return;
+    const now = this.time.now;
+    if (now - this.bossHitCooldown < 300) return; // debounce 300ms
+    this.bossHitCooldown = now;
     this.cameras.main.shake(150, 0.006);
     this.playTone('hit-brick');
     this.bossHp -= 1;
@@ -1339,6 +1344,9 @@ class MainState extends Phaser.Scene {
 
   shootBoss(bullet, bossBrick) {
     if (!this.bossActive) return;
+    const now = this.time.now;
+    if (now - this.bossHitCooldown < 300) return; // debounce 300ms
+    this.bossHitCooldown = now;
     bullet.setActive(false).setVisible(false);
     bullet.body.enable = false;
     this.bossHp -= 1;
