@@ -119,6 +119,7 @@ class MainState extends Phaser.Scene {
     this.combo = 0;
     this.comboMultiplier = 1;
     this.magnetActive = false;
+    this.shieldActive = false;
 
     // --- Paddle ---
     this.paddle = this.add.rectangle(centerX, H - 20, W / 3, 15, 0xffffff);
@@ -220,6 +221,18 @@ class MainState extends Phaser.Scene {
       this.powerUps.push(pu);
     }
 
+    // --- Shield (one-hit barrier) ---
+    const shieldY = H - 8;
+    this.shieldRect = this.add.rectangle(W / 2, shieldY, W, 6, 0x44ffff);
+    this.physics.add.existing(this.shieldRect);
+    this.shieldRect.body.setImmovable(true);
+    this.shieldRect.body.setAllowGravity(false);
+    this.shieldRect.setVisible(false);
+    this.shieldRect.body.enable = false;
+
+    this.shieldGfx = this.add.graphics();
+    this.shieldGfx.setVisible(false);
+
     // --- Text ---
     const fontBold = 'Bungee Shade';
     this.scoreText = this.add.text(10, 10, 'Score: ' + this.score, {
@@ -314,6 +327,10 @@ class MainState extends Phaser.Scene {
     this.physics.add.overlap(this.enemyBullets, this.paddle, this.enemyBulletHit, null, this);
     // Enemy body hitting paddle: destroy enemy + shrink paddle
     this.physics.add.overlap(this.enemies, this.paddle, this.enemyHitsPaddle, null, this);
+
+    // Shield colliders — only fire when shieldRect.body.enable = true
+    this.physics.add.overlap(this.balls, this.shieldRect, this.shieldHitByBall, null, this);
+    this.physics.add.overlap(this.enemyBullets, this.shieldRect, this.shieldHitByBullet, null, this);
 
     // --- Camera flash on start ---
     this.cameras.main.flash(2000, 255, 255, 255);
@@ -594,6 +611,12 @@ class MainState extends Phaser.Scene {
         break;
       case 'magnet':
         this.magnetActive = true;
+        break;
+      case 'shield':
+        this.shieldActive = true;
+        this.shieldRect.body.enable = true;
+        this.shieldGfx.setVisible(true);
+        this.drawShield();
         break;
     }
 
@@ -1059,8 +1082,43 @@ class MainState extends Phaser.Scene {
     }
   }
 
+  drawShield() {
+    const W = this.scale.width;
+    const H = this.scale.height;
+    this.shieldGfx.clear();
+    // Glow backing
+    this.shieldGfx.fillStyle(0x44ffff, 0.25);
+    this.shieldGfx.fillRoundedRect(0, H - 12, W, 10, 3);
+    // Main bar
+    this.shieldGfx.fillStyle(0x44ffff, 1.0);
+    this.shieldGfx.fillRoundedRect(0, H - 11, W, 6, 3);
+  }
+
+  deactivateShield() {
+    this.shieldActive = false;
+    this.shieldRect.body.enable = false;
+    this.shieldGfx.setVisible(false);
+    this.shieldGfx.clear();
+  }
+
+  shieldHitByBall(ball, shieldRect) {
+    if (ball.body.velocity.y > 0) {
+      ball.body.setVelocityY(-ball.body.velocity.y);
+    }
+    this.deactivateShield();
+    this.playTone('shield-hit');
+  }
+
+  shieldHitByBullet(enemyBullet, shieldRect) {
+    enemyBullet.setActive(false).setVisible(false);
+    enemyBullet.body.enable = false;
+    this.deactivateShield();
+    this.playTone('shield-hit');
+  }
+
   resetPowerUps() {
     this.magnetActive = false;
+    if (this.shieldActive) this.deactivateShield();
     this.powerUps.forEach(pu => {
       if (pu.active) {
         pu.setActive(false).setVisible(false);
