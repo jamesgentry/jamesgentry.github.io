@@ -127,8 +127,12 @@ class TitleScene extends Phaser.Scene {
       const x = i % 2 === 0 ? col0X : col1X;
       const y = legendStartY + Math.floor(i / 2) * 28;
       this.add.rectangle(x + 6, y + 8, 12, 12, color);
-      this.add.text(x + 16, y, label, { font: '14px Bungee Shade', fill: '#ffffff' });
+      this.add.text(x + 16, y, label, { font: '13px Arial', fill: '#ffffff' });
     });
+
+    this.add.text(W / 2, legendStartY + Math.ceil(legendDefs.length / 2) * 28 + 16, 'M — toggle music', {
+      font: '13px Arial', fill: '#aaaacc'
+    }).setOrigin(0.5, 0);
 
     this.input.keyboard.once('keydown-UP', () => this.scene.start('MainState'));
     this.time.delayedCall(300, () => {
