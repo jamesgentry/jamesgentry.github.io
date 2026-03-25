@@ -135,7 +135,7 @@ class TitleScene extends Phaser.Scene {
       font: '13px Arial', fill: '#ffffff'
     }).setOrigin(0.5, 0);
 
-    this.add.text(W / 2, belowLegendY + 24, '← → move  ·  ↑ launch  ·  SPACE laser  ·  R restart', {
+    this.add.text(W / 2, belowLegendY + 24, '← → move  ·  ↑ launch  ·  SPACE laser  ·  SHIFT+← → nudge  ·  R restart', {
       font: '13px Arial', fill: '#aaddff'
     }).setOrigin(0.5, 0);
 
@@ -341,6 +341,8 @@ class MainState extends Phaser.Scene {
     this.fireKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     this.restartKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
     this.musicKey  = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.M);
+    this.shiftKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
+    this.nudgeCooldown = 0;
 
     // Prevent browser scroll on game keys
     this.input.keyboard.addCapture([
@@ -349,6 +351,7 @@ class MainState extends Phaser.Scene {
       Phaser.Input.Keyboard.KeyCodes.DOWN,
       Phaser.Input.Keyboard.KeyCodes.LEFT,
       Phaser.Input.Keyboard.KeyCodes.RIGHT,
+      Phaser.Input.Keyboard.KeyCodes.SHIFT,
     ]);
 
     this.cursors.down.on('down', this.pauseToggle, this);
