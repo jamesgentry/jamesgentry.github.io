@@ -111,7 +111,9 @@ class TitleScene extends Phaser.Scene {
     }).setOrigin(0.5, 0);
 
     this.input.keyboard.once('keydown-DOWN', () => this.scene.start('MainState'));
-    this.input.on('pointerdown', () => this.scene.start('MainState'));
+    this.time.delayedCall(300, () => {
+      this.input.once('pointerdown', () => this.scene.start('MainState'));
+    });
   }
 }
 
@@ -1146,7 +1148,7 @@ class GameOverScene extends Phaser.Scene {
   create() {
     const W = this.scale.width;
     const H = this.scale.height;
-    const { score, level, highScore } = this.scene.settings.data;
+    const { score = 0, level = 1, highScore = 0 } = this.scene.settings.data ?? {};
     const isNewBest = score > highScore;
 
     // Prevent page scroll on DOWN keypress
@@ -1171,7 +1173,9 @@ class GameOverScene extends Phaser.Scene {
     }).setOrigin(0.5, 0);
 
     this.input.keyboard.once('keydown-DOWN', () => this.scene.start('TitleScene'));
-    this.input.on('pointerdown', () => this.scene.start('TitleScene'));
+    this.time.delayedCall(300, () => {
+      this.input.once('pointerdown', () => this.scene.start('TitleScene'));
+    });
   }
 }
 
