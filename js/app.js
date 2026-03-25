@@ -130,8 +130,13 @@ class TitleScene extends Phaser.Scene {
       this.add.text(x + 16, y, label, { font: '13px Arial', fill: '#ffffff' });
     });
 
-    this.add.text(W / 2, legendStartY + Math.ceil(legendDefs.length / 2) * 28 + 16, 'M — toggle sound', {
+    const belowLegendY = legendStartY + Math.ceil(legendDefs.length / 2) * 28 + 16;
+    this.add.text(W / 2, belowLegendY, 'M — toggle sound', {
       font: '13px Arial', fill: '#ffffff'
+    }).setOrigin(0.5, 0);
+
+    this.add.text(W / 2, belowLegendY + 24, '← → move  ·  ↑ launch  ·  SPACE laser  ·  R restart', {
+      font: '13px Arial', fill: '#aaddff'
     }).setOrigin(0.5, 0);
 
     this.input.keyboard.once('keydown-UP', () => this.scene.start('MainState'));
@@ -1433,21 +1438,21 @@ class GameOverScene extends Phaser.Scene {
     // Prevent page scroll on DOWN keypress
     this.input.keyboard.addCapture(Phaser.Input.Keyboard.KeyCodes.DOWN);
 
-    this.add.text(W / 2, H * 0.3, 'GAME OVER', {
+    this.add.text(W / 2, H * 0.18, 'GAME OVER', {
       font: '64px Bungee Shade', fill: '#ffffff'
     }).setOrigin(0.5, 0);
 
-    this.add.text(W / 2, H * 0.3 + 60, 'Score: ' + score + '  ·  Level ' + level + ' reached', {
+    this.add.text(W / 2, H * 0.18 + 90, 'Score: ' + score + '  ·  Level ' + level + ' reached', {
       font: '24px Bungee Shade', fill: '#ffffff'
     }).setOrigin(0.5, 0);
 
     if (isNewBest) {
-      this.add.text(W / 2, H * 0.3 + 100, 'NEW BEST!', {
+      this.add.text(W / 2, H * 0.18 + 130, 'NEW BEST!', {
         font: '32px Bungee Shade', fill: '#ffdd00'
       }).setOrigin(0.5, 0);
     }
 
-    this.add.text(W / 2, H * 0.3 + 150, 'PRESS DOWN TO PLAY AGAIN', {
+    this.add.text(W / 2, H * 0.18 + 185, 'PRESS DOWN TO PLAY AGAIN', {
       font: '20px Bungee Shade', fill: '#aaddff'
     }).setOrigin(0.5, 0);
 
