@@ -1098,11 +1098,16 @@ class MainState extends Phaser.Scene {
       neighbor.hp -= 1;
       if (neighbor.hp <= 0) {
         const nidx = this.brickObjects.indexOf(neighbor);
-        if (this.brickCrackGfx[nidx]) this.brickCrackGfx[nidx].clear();
-        neighbor.isFalling = true; // set BEFORE recursive call — prevents re-entry on same brick
-        neighbor.body.setImmovable(false);
-        neighbor.body.setAllowGravity(true);
-        if (neighbor.isExplosive) this.triggerExplosion(neighbor); // chain
+        if (neighbor.isExplosive) {
+          if (this.brickCrackGfx[nidx]) this.brickCrackGfx[nidx].clear();
+          this.triggerExplosion(neighbor); // chain fires immediately
+          this.flashThenDeactivate(neighbor, nidx); // flash then deactivate (sets isFalling + disables body)
+        } else {
+          if (this.brickCrackGfx[nidx]) this.brickCrackGfx[nidx].clear();
+          neighbor.isFalling = true;
+          neighbor.body.setImmovable(false);
+          neighbor.body.setAllowGravity(true);
+        }
       } else {
         const c = Phaser.Display.Color.IntegerToColor(neighbor.fillColor).darken(25);
         neighbor.setFillStyle(c.color);
