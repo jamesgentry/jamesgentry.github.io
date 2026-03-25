@@ -152,6 +152,7 @@ class MainState extends Phaser.Scene {
     this.brickCrackGfx = [];
     for (let i = 0; i < 60; i++) {
       const gfx = this.add.graphics();
+      gfx.setDepth(1); // above bricks (depth 0), below paddle (depth 10)
       this.brickCrackGfx.push(gfx);
     }
 
