@@ -554,6 +554,20 @@ class MainState extends Phaser.Scene {
       this.paddle.body.setVelocityX(0);
     }
 
+    // Nudge (Shift+Left/Right): apply horizontal impulse to active balls
+    if (this.shiftKey.isDown && (this.cursors.left.isDown || this.cursors.right.isDown)) {
+      if (time - this.nudgeCooldown >= 500) {
+        const dir = this.cursors.left.isDown ? -1 : 1;
+        this.balls.forEach(ball => {
+          if (ball.active && !ball.startPos) {
+            ball.body.velocity.x += dir * 160;
+          }
+        });
+        this.cameras.main.shake(80, 0.003);
+        this.nudgeCooldown = time;
+      }
+    }
+
     // Fire bullets
     if (this.fireKey.isDown) {
       this.fireBullet();
@@ -1398,6 +1412,7 @@ class MainState extends Phaser.Scene {
   }
 
   resetPowerUps() {
+    this.nudgeCooldown = 0;
     if (this.timeSlowTimer) { this.timeSlowTimer.remove(); this.timeSlowTimer = null; }
     this.timeSlowActive = false;
     this.physics.world.timeScale = 1.0;
