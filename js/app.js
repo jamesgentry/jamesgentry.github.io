@@ -231,6 +231,7 @@ class MainState extends Phaser.Scene {
     this.shieldRect.body.enable = false;
 
     this.shieldGfx = this.add.graphics();
+    this.shieldGfx.setDepth(5); // above bricks (depth 1), below paddle (depth 10)
     this.shieldGfx.setVisible(false);
 
     // --- Text ---
@@ -1102,6 +1103,7 @@ class MainState extends Phaser.Scene {
   }
 
   shieldHitByBall(ball, shieldRect) {
+    if (!this.shieldActive) return;
     if (ball.body.velocity.y > 0) {
       ball.body.setVelocityY(-ball.body.velocity.y);
     }
@@ -1110,6 +1112,7 @@ class MainState extends Phaser.Scene {
   }
 
   shieldHitByBullet(enemyBullet, shieldRect) {
+    if (!this.shieldActive) return;
     enemyBullet.setActive(false).setVisible(false);
     enemyBullet.body.enable = false;
     this.deactivateShield();
