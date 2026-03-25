@@ -231,7 +231,7 @@ class MainState extends Phaser.Scene {
     }).setOrigin(0.5, 0.5).setVisible(false);
     this.comboText = this.add.text(W / 2, H / 2, '', {
       font: '56px Bungee Shade', fill: '#ffff00'
-    }).setOrigin(0.5, 0.5).setAlpha(0);
+    }).setOrigin(0.5, 0.5).setAlpha(0).setDepth(20);
 
     // --- Power-up legend (shown on start screen, hidden on launch) ---
     const legendY = centerY + 100;
