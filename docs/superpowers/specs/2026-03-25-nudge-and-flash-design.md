@@ -46,6 +46,16 @@ Two independent gameplay improvements:
 ### Reset
 - `this.nudgeCooldown = 0` in `resetPowerUps()` (called on life loss and level reset)
 
+### Title screen controls hint
+The existing controls line in `TitleScene` currently reads:
+```
+← → move  ·  ↑ launch  ·  SPACE laser  ·  R restart
+```
+Update it to include the nudge instruction:
+```
+← → move  ·  ↑ launch  ·  SPACE laser  ·  SHIFT+← → nudge  ·  R restart
+```
+
 ---
 
 ## Feature 2: Explosive Brick Flash Animation
