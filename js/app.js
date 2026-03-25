@@ -1063,6 +1063,24 @@ class MainState extends Phaser.Scene {
     gfx.strokePath();
   }
 
+  flashThenDeactivate(brick, idx) {
+    brick.isFalling = true;
+    brick.body.enable = false;
+    if (this.brickCrackGfx[idx]) this.brickCrackGfx[idx].clear();
+    const origColor = brick.fillColor;
+    let step = 0;
+    const doStep = () => {
+      step++;
+      brick.setFillStyle(step % 2 === 1 ? 0xffffff : origColor);
+      if (step < 6) {
+        this.time.delayedCall(100, doStep);
+      } else {
+        brick.setActive(false).setVisible(false);
+      }
+    };
+    doStep(); // step 1 fires immediately (brick turns white at t=0)
+  }
+
   triggerExplosion(brick) {
     const col = Math.round((brick.initX - this._gridStartX) / (BOX_W + 4));
     const row = Math.round((brick.initY - this._gridStartY) / (BOX_H + 10));
