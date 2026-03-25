@@ -1344,11 +1344,13 @@ class MainState extends Phaser.Scene {
 
   shootBoss(bullet, bossBrick) {
     if (!this.bossActive) return;
+    // Always consume the bullet on contact
+    bullet.setActive(false).setVisible(false);
+    bullet.body.enable = false;
+    // Debounce damage
     const now = this.time.now;
     if (now - this.bossHitCooldown < 300) return; // debounce 300ms
     this.bossHitCooldown = now;
-    bullet.setActive(false).setVisible(false);
-    bullet.body.enable = false;
     this.bossHp -= 1;
     this.cameras.main.shake(200, 0.01);
     this.playTone('explode');
