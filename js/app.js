@@ -540,6 +540,7 @@ class MainState extends Phaser.Scene {
           brick.body.enable = false;
           brick.hp = 0;
           brick.isExplosive = false;
+          brick.forcePowerUp = false;
           if (this.brickCrackGfx && this.brickCrackGfx[idx]) this.brickCrackGfx[idx].clear();
         }
       }));
@@ -820,6 +821,10 @@ class MainState extends Phaser.Scene {
         brick.isFalling = true;
         brick.body.setImmovable(false);
         brick.body.setAllowGravity(true);
+      }
+      // Power-up drop — 33% chance, or guaranteed if flagged
+      if (brick.forcePowerUp || Math.random() < 0.33) {
+        this.spawnPowerUp(brick.x, brick.y);
       }
     } else {
       // Damage visual: darken color + draw cracks
