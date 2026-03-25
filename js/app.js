@@ -111,6 +111,10 @@ class TitleScene extends Phaser.Scene {
       font: '24px Bungee Shade', fill: '#aaddff'
     }).setOrigin(0.5, 0);
 
+    this.add.text(W / 2, H * 0.35 + 96, 'Break all the bricks to advance.\nCollect power-ups. Survive the boss.', {
+      font: '13px Arial', fill: '#ccddff', align: 'center'
+    }).setOrigin(0.5, 0);
+
     // Power-up legend
     const legendDefs = [
       ['WIDE',     0xff8800], ['FAST',   0xffff00],
@@ -119,7 +123,7 @@ class TitleScene extends Phaser.Scene {
       ['SHIELD',   0x44ffff], ['BIG BALL', 0x00aaff],
       ['TIME SLOW', 0xaaaaff],
     ];
-    const legendStartY = H * 0.35 + 120;
+    const legendStartY = H * 0.35 + 152;
     const colW = 130;
     const col0X = W / 2 - colW;
     const col1X = W / 2 + 10;
@@ -334,9 +338,23 @@ class MainState extends Phaser.Scene {
     this.levelText = this.add.text(W / 2, 10, 'Level: 1', {
       font: '20px ' + fontBold, fill: '#ffffff'
     }).setOrigin(0.5, 0);
-    this.pauseText = this.add.text(centerX, centerY, 'Paused', {
-      font: '30px ' + fontBold, fill: '#ffffff', align: 'center'
-    }).setOrigin(0.5, 0.5).setVisible(false);
+    this.pauseBg = this.add.rectangle(centerX, centerY, 300, 260, 0x000000, 0.75)
+      .setDepth(50).setVisible(false);
+    this.pauseHeader = this.add.text(centerX, centerY - 100, 'PAUSED', {
+      font: '28px Bungee', fill: '#ffffff', align: 'center'
+    }).setOrigin(0.5, 0).setDepth(51).setVisible(false);
+    this.pauseText = this.add.text(centerX, centerY - 58, [
+      '↑  launch ball',
+      '← →  move paddle',
+      'SHIFT + ← →  nudge ball',
+      'SPACE  fire laser',
+      'M  toggle sound',
+      'R  restart',
+      '',
+      '↓  resume',
+    ], {
+      font: '14px Arial', fill: '#ccddff', align: 'center', lineSpacing: 6
+    }).setOrigin(0.5, 0).setDepth(51).setVisible(false);
     this.comboText = this.add.text(W / 2, H / 2, '', {
       font: '56px Bungee Shade', fill: '#ffff00'
     }).setOrigin(0.5, 0.5).setAlpha(0).setDepth(20);
@@ -1083,7 +1101,10 @@ class MainState extends Phaser.Scene {
     } else {
       this.physics.world.pause();
     }
-    this.pauseText.setVisible(this.physics.world.isPaused);
+    const visible = this.physics.world.isPaused;
+    this.pauseBg.setVisible(visible);
+    this.pauseHeader.setVisible(visible);
+    this.pauseText.setVisible(visible);
   }
 
   checkHighScore() {
