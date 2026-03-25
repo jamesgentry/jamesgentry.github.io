@@ -12,6 +12,16 @@ const POWERUP_COLORS = {
   life:  0xff88cc  // pink
 };
 
+const SOUNDS = {
+  'hit-brick':  { freq: 220, type: 'square',   dur: 0.06, vol: 0.3 },
+  'hit-paddle': { freq: 180, type: 'sine',      dur: 0.08, vol: 0.3 },
+  'explode':    { freq: 80,  type: 'sawtooth',  dur: 0.10, vol: 0.4, freqEnd: 30 },
+  'powerup':    { freq: 400, type: 'sine',      dur: 0.15, vol: 0.5, freqEnd: 600 },
+  'life-lost':  { freq: 440, type: 'square',    dur: 0.40, vol: 0.5, freqEnd: 110 },
+  'enemy-die':  { freq: 300, type: 'square',    dur: 0.05, vol: 0.3 },
+  'shield-hit': { freq: 600, type: 'triangle',  dur: 0.10, vol: 0.4, freqEnd: 200 },
+};
+
 // Each entry is 6 rows × 10 cols, '1' = active brick, '0' = gap
 const PATTERNS = [
   // Level 1 — tutorial: single row (6 bricks)
@@ -691,7 +701,11 @@ class MainState extends Phaser.Scene {
   playTone(name) {
     if (this.sound.mute) return;
     const ctx = this.sound.context;
-    if (!ctx || ctx.state === 'suspended') return;
+    if (!ctx) return;
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+      return;
+    }
 
     // level-up: 3-note fanfare C5→E5→G5
     if (name === 'level-up') {
@@ -711,17 +725,7 @@ class MainState extends Phaser.Scene {
       return;
     }
 
-    const sounds = {
-      'hit-brick':  { freq: 220, type: 'square',   dur: 0.06, vol: 0.3 },
-      'hit-paddle': { freq: 180, type: 'sine',      dur: 0.08, vol: 0.3 },
-      'explode':    { freq: 80,  type: 'sawtooth',  dur: 0.10, vol: 0.4, freqEnd: 30 },
-      'powerup':    { freq: 400, type: 'sine',      dur: 0.15, vol: 0.5, freqEnd: 600 },
-      'life-lost':  { freq: 440, type: 'square',    dur: 0.40, vol: 0.5, freqEnd: 110 },
-      'enemy-die':  { freq: 300, type: 'square',    dur: 0.05, vol: 0.3 },
-      'shield-hit': { freq: 600, type: 'triangle',  dur: 0.10, vol: 0.4, freqEnd: 200 },
-    };
-
-    const s = sounds[name];
+    const s = SOUNDS[name];
     if (!s) return;
 
     const osc = ctx.createOscillator();
