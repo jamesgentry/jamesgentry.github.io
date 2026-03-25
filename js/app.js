@@ -147,6 +147,14 @@ class MainState extends Phaser.Scene {
     // --- Bricks (pre-created, pooled) ---
     this.brickObjects = [];
     this.initBricks(centerX);
+
+    // Per-brick crack graphics (one per brick slot, index matches brickObjects[])
+    this.brickCrackGfx = [];
+    for (let i = 0; i < 60; i++) {
+      const gfx = this.add.graphics();
+      this.brickCrackGfx.push(gfx);
+    }
+
     this.applyPattern(1);
     this.setBackground(1);
 
@@ -356,10 +364,21 @@ class MainState extends Phaser.Scene {
     const patternIndex = level <= 1 ? 0 : ((level - 2) % (PATTERNS.length - 1)) + 1;
     const pattern = PATTERNS[patternIndex];
     const color = PATTERN_COLORS[(level - 1) % PATTERN_COLORS.length];
+
+    // Seeded RNG for HP — use actual level number
+    const rng = level >= 2 ? this.mulberry32(level) : null;
+
     for (let col = 0; col < COLS; col++) {
       for (let row = 0; row < ROWS; row++) {
-        const brick = this.brickObjects[col * ROWS + row];
+        const idx = col * ROWS + row;
+        const brick = this.brickObjects[idx];
         const active = pattern[row][col] === '1';
+
+        // Always clear stale crack graphics
+        if (this.brickCrackGfx && this.brickCrackGfx[idx]) {
+          this.brickCrackGfx[idx].clear();
+        }
+
         brick.isFalling = false;
         if (active) {
           brick.setFillStyle(color);
@@ -369,9 +388,26 @@ class MainState extends Phaser.Scene {
           brick.body.setImmovable(true);
           brick.body.setAllowGravity(false);
           brick.body.setVelocity(0, 0);
+
+          // Assign HP
+          let hp = 1;
+          if (level >= 2 && rng) {
+            const r = rng();
+            if (level === 2) {
+              hp = r < 0.8 ? 1 : 2;
+            } else if (level === 3) {
+              hp = r < 0.6 ? 1 : r < 0.9 ? 2 : 3;
+            } else {
+              hp = r < 0.4 ? 1 : r < 0.8 ? 2 : 3;
+            }
+          }
+          brick.hp = hp;
+          brick.maxHp = hp;
         } else {
           brick.setActive(false).setVisible(false);
           brick.body.enable = false;
+          brick.hp = 0;
+          brick.maxHp = 0;
         }
       }
     }
@@ -430,6 +466,10 @@ class MainState extends Phaser.Scene {
     // Kill bricks that fall off screen
     this.brickObjects.forEach(brick => {
       if (brick.active && brick.y > H + 50) {
+        const idx = this.brickObjects.indexOf(brick);
+        if (this.brickCrackGfx && this.brickCrackGfx[idx]) {
+          this.brickCrackGfx[idx].clear();
+        }
         brick.setActive(false).setVisible(false);
         brick.body.enable = false;
       }
@@ -591,9 +631,23 @@ class MainState extends Phaser.Scene {
     }
     this.comboMultiplier = newMult;
 
-    brick.isFalling = true;
-    brick.body.setImmovable(false);
-    brick.body.setAllowGravity(true);
+    // HP system
+    brick.hp -= 1;
+    if (brick.hp <= 0) {
+      // Clear cracks before brick falls
+      const idx = this.brickObjects.indexOf(brick);
+      if (this.brickCrackGfx && this.brickCrackGfx[idx]) {
+        this.brickCrackGfx[idx].clear();
+      }
+      brick.isFalling = true;
+      brick.body.setImmovable(false);
+      brick.body.setAllowGravity(true);
+    } else {
+      // Damage visual: darken color + draw cracks
+      const c = Phaser.Display.Color.IntegerToColor(brick.fillColor).darken(25);
+      brick.setFillStyle(c.color);
+      this.drawBrickCracks(brick);
+    }
   }
 
   shrinkPaddle(paddle) {
@@ -633,6 +687,10 @@ class MainState extends Phaser.Scene {
 
   brickVsPaddle(brick, paddle) {
     if (!brick.isFalling) return;
+    const idx = this.brickObjects.indexOf(brick);
+    if (this.brickCrackGfx && this.brickCrackGfx[idx]) {
+      this.brickCrackGfx[idx].clear();
+    }
     brick.setActive(false).setVisible(false);
     brick.body.enable = false;
     if (this.shrinkPaddle(paddle)) this.loseLife();
@@ -686,6 +744,10 @@ class MainState extends Phaser.Scene {
     // Kill brick first
     brick.setActive(false).setVisible(false);
     brick.body.enable = false;
+    const idx = this.brickObjects.indexOf(brick);
+    if (this.brickCrackGfx && this.brickCrackGfx[idx]) {
+      this.brickCrackGfx[idx].clear();
+    }
 
     // Power-up drop — 33% chance
     if (Math.random() < 0.33) {
@@ -794,6 +856,37 @@ class MainState extends Phaser.Scene {
       delay: 500,
       duration: 300,
     });
+  }
+
+  mulberry32(seed) {
+    return function() {
+      seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+      let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  drawBrickCracks(brick) {
+    const idx = this.brickObjects.indexOf(brick);
+    if (idx < 0) return;
+    const gfx = this.brickCrackGfx[idx];
+    if (!gfx) return;
+    const hitsAbsorbed = brick.maxHp - brick.hp;
+    gfx.clear();
+    gfx.lineStyle(2, 0x000000, 0.55);
+    if (hitsAbsorbed >= 1) {
+      gfx.beginPath();
+      gfx.moveTo(brick.x - BOX_W / 2 + 4, brick.y - BOX_H / 2 + 4);
+      gfx.lineTo(brick.x + BOX_W / 2 - 4, brick.y + BOX_H / 2 - 4);
+      gfx.strokePath();
+    }
+    if (hitsAbsorbed >= 2) {
+      gfx.beginPath();
+      gfx.moveTo(brick.x + BOX_W / 2 - 4, brick.y - BOX_H / 2 + 4);
+      gfx.lineTo(brick.x - BOX_W / 2 + 4, brick.y + BOX_H / 2 - 4);
+      gfx.strokePath();
+    }
   }
 
   restartGame() {
