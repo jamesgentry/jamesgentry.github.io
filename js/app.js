@@ -107,6 +107,24 @@ class TitleScene extends Phaser.Scene {
       font: '24px Bungee Shade', fill: '#aaddff'
     }).setOrigin(0.5, 0);
 
+    // Power-up legend
+    const legendDefs = [
+      ['WIDE',   0x00ffff], ['FAST',   0xffff00],
+      ['MULTI',  0x00ff00], ['LASER',  0xff4444],
+      ['LIFE',   0xff88cc], ['MAGNET', 0x9933ff],
+      ['SHIELD', 0x44ffff],
+    ];
+    const legendStartY = H * 0.35 + 120;
+    const colW = 130;
+    const col0X = W / 2 - colW;
+    const col1X = W / 2 + 10;
+    legendDefs.forEach(([label, color], i) => {
+      const x = i % 2 === 0 ? col0X : col1X;
+      const y = legendStartY + Math.floor(i / 2) * 28;
+      this.add.rectangle(x + 6, y + 8, 12, 12, color);
+      this.add.text(x + 16, y, label, { font: '14px Bungee Shade', fill: '#ffffff' });
+    });
+
     this.input.keyboard.once('keydown-UP', () => this.scene.start('MainState'));
     this.time.delayedCall(300, () => {
       this.input.once('pointerdown', () => this.scene.start('MainState'));
@@ -247,8 +265,8 @@ class MainState extends Phaser.Scene {
       this.powerUps.push(pu);
     }
 
-    // --- Shield (one-hit barrier) ---
-    const shieldY = H - 8;
+    // --- Shield (one-hit barrier — sits above the paddle) ---
+    const shieldY = H - 42;
     this.shieldRect = this.add.rectangle(W / 2, shieldY, W, 6, 0x44ffff);
     this.physics.add.existing(this.shieldRect);
     this.shieldRect.body.setImmovable(true);
@@ -1089,13 +1107,14 @@ class MainState extends Phaser.Scene {
   drawShield() {
     const W = this.scale.width;
     const H = this.scale.height;
+    const sy = H - 42; // matches shieldRect Y
     this.shieldGfx.clear();
     // Glow backing
     this.shieldGfx.fillStyle(0x44ffff, 0.25);
-    this.shieldGfx.fillRoundedRect(0, H - 12, W, 10, 3);
+    this.shieldGfx.fillRoundedRect(0, sy - 4, W, 10, 3);
     // Main bar
     this.shieldGfx.fillStyle(0x44ffff, 1.0);
-    this.shieldGfx.fillRoundedRect(0, H - 11, W, 6, 3);
+    this.shieldGfx.fillRoundedRect(0, sy - 3, W, 6, 3);
   }
 
   deactivateShield() {
