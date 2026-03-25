@@ -12,6 +12,7 @@ const POWERUP_COLORS = {
   life:   0xff88cc, // pink
   magnet: 0x9933ff, // purple
   shield: 0x44ffff, // light cyan
+  bigball: 0x00aaff, // sky blue
 };
 
 const SOUNDS = {
@@ -109,10 +110,10 @@ class TitleScene extends Phaser.Scene {
 
     // Power-up legend
     const legendDefs = [
-      ['WIDE',   0x00ffff], ['FAST',   0xffff00],
-      ['MULTI',  0x00ff00], ['LASER',  0xff4444],
-      ['LIFE',   0xff88cc], ['MAGNET', 0x9933ff],
-      ['SHIELD', 0x44ffff],
+      ['WIDE',     0xff8800], ['FAST',   0xffff00],
+      ['MULTI',    0x00ff00], ['LASER',  0xff4444],
+      ['LIFE',     0xff88cc], ['MAGNET', 0x9933ff],
+      ['SHIELD',   0x44ffff], ['BIG BALL', 0x00aaff],
     ];
     const legendStartY = H * 0.35 + 120;
     const colW = 130;
@@ -164,6 +165,8 @@ class MainState extends Phaser.Scene {
     this.comboMultiplier = 1;
     this.magnetActive = false;
     this.shieldActive = false;
+    this.ballSizeActive = false;
+    this.ballSizeTimer = null;
 
     // --- Paddle ---
     this.paddle = this.add.rectangle(centerX, H - 20, W / 3, 15, 0xffffff);
@@ -586,7 +589,7 @@ class MainState extends Phaser.Scene {
   }
 
   spawnPowerUp(x, y) {
-    const types = ['wide', 'fast', 'multi', 'laser', 'life', 'magnet', 'shield'];
+    const types = ['wide', 'fast', 'multi', 'laser', 'life', 'magnet', 'shield', 'bigball', 'timeslow'];
     const pu = this.powerUps.find(p => !p.active);
     if (!pu) return;
     pu.type = Phaser.Utils.Array.GetRandom(types);
@@ -631,6 +634,9 @@ class MainState extends Phaser.Scene {
         this.shieldRect.body.enable = true;
         this.shieldGfx.setVisible(true);
         this.drawShield();
+        break;
+      case 'bigball':
+        this.activateBigBall();
         break;
     }
 
@@ -1097,6 +1103,10 @@ class MainState extends Phaser.Scene {
     ball.body.enable = true;
     ball.body.reset(x, y);
     ball.startPos = startPos;
+    // Apply current ball size (respects bigball power-up)
+    const r = this.ballSizeActive ? BALL_RADIUS * 2 : BALL_RADIUS;
+    ball.setRadius(r);
+    ball.body.setCircle(r);
     if (startPos) {
       ball.body.setVelocity(0, 0);  // held in place; launch handled by releaseBall()
     } else {
@@ -1124,6 +1134,29 @@ class MainState extends Phaser.Scene {
     this.shieldGfx.clear();
   }
 
+  activateBigBall() {
+    if (this.ballSizeTimer) this.ballSizeTimer.remove();
+    this.ballSizeActive = true;
+    this.balls.forEach(ball => {
+      if (ball.active) {
+        ball.setRadius(BALL_RADIUS * 2);
+        ball.body.setCircle(BALL_RADIUS * 2);
+      }
+    });
+    this.ballSizeTimer = this.time.delayedCall(8000, () => this.deactivateBigBall());
+  }
+
+  deactivateBigBall() {
+    this.ballSizeActive = false;
+    this.ballSizeTimer = null;
+    this.balls.forEach(ball => {
+      if (ball.active) {
+        ball.setRadius(BALL_RADIUS);
+        ball.body.setCircle(BALL_RADIUS);
+      }
+    });
+  }
+
   shieldHitByBall(ball, shieldRect) {
     if (!this.shieldActive) return;
     if (ball.body.velocity.y > 0) {
@@ -1142,6 +1175,12 @@ class MainState extends Phaser.Scene {
   }
 
   resetPowerUps() {
+    if (this.ballSizeTimer) { this.ballSizeTimer.remove(); this.ballSizeTimer = null; }
+    this.ballSizeActive = false;
+    this.balls.forEach(ball => {
+      ball.setRadius(BALL_RADIUS);
+      ball.body.setCircle(BALL_RADIUS);
+    });
     this.magnetActive = false;
     if (this.shieldActive) this.deactivateShield();
     this.powerUps.forEach(pu => {
